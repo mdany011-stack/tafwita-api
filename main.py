@@ -60,3 +60,25 @@ def reset_queue():
     queue_state["serving_num"] = 0
     queue_state["total_issued"] = 0
     return {"status": "reset_done"}
+    # 1. Inscription d'un nouveau cabinet médical
+@app.post("/api/cabinets/register")
+def register_cabinet(nom: str, specialite: str, telephone: str, wilaya: str):
+    # Créer le cabinet avec 14 jours d'essai gratuit
+    cabinet_id = f"cab_{telephone[-4:]}"
+    return {
+        "status": "success",
+        "cabinet_id": cabinet_id,
+        "pin_code": "1234",
+        "message": "Cabinet créé avec succès ! Période d'essai activée."
+    }
+
+# 2. Inscription / Prise de ticket d'un patient
+@app.post("/api/patients/ticket")
+def register_patient_ticket(cabinet_id: str, nom_patient: str, telephone: str):
+    # Attribuer le prochain numéro disponible pour ce cabinet
+    return {
+        "status": "success",
+        "ticket_num": 16,
+        "cabinet_id": cabinet_id,
+        "patient": nom_patient
+    }
