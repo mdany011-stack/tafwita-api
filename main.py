@@ -306,4 +306,47 @@ def list_tickets(cabinet_slug: str, db: Session = Depends(get_db)):
 def update_cabinet_settings(cabinet_slug: str, pin: str, data: CabinetSettingsUpdate, db: Session = Depends(get_db)):
     cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
     if not cabinet:
-        raise HTTPException(status_code=404,
+        raise HTTPException(status_code=404, detail="Cabinet introuvable.")
+    if cabinet.code_pin != pin:
+        raise HTTPException(status_code=403, detail="Code PIN incorrect.")
+
+    if data.adresse is not None:
+        cabinet.adresse = data.adresse
+    if data.heure_ouverture is not None:
+        cabinet.heure_ouverture = data.heure_ouverture
+    if data.heure_fermeture is not None:
+        cabinet.heure_fermeture = data.heure_fermeture
+    if data.photo_url is not None:
+        cabinet.photo_url = data.photo_url
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "adresse": cabinet.adresse,
+        "heure_ouverture": cabinet.heure_ouverture,
+        "heure_fermeture": cabinet.heure_fermeture,
+        "photo_url": cabinet.photo_url,
+    }
+
+
+@app.post("/api/tickets/{ticket_id}/complete")
+def complete_ticket(ticket_id: int, db: Session = Depends(get_db)):
+    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket introuvable.")
+
+    if not ticket.started_at:
+        ticket.started_at = datetime.utcnow()
+    ticket.completed_at = datetime.utcnow()
+    ticket.statut = "completed"
+    db.commit()
+
+    delta_seconds = (ticket.completed_at - ticket.started_at).total_seconds()
+    duree_min = round(delta_seconds / 60, 1)
+
+    return {
+        "status": "success",
+        "ticket_num": ticket.ticket_num,
+        "duree_min": duree_min,
+    }
