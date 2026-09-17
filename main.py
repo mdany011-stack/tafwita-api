@@ -33,6 +33,10 @@ class Cabinet(Base):
     specialite = Column(String)
     telephone = Column(String, unique=True)
     wilaya = Column(String)
+    adresse = Column(String, nullable=True)                  # adresse complete du cabinet
+    heure_ouverture = Column(String, default="08:00")         # format HH:MM
+    heure_fermeture = Column(String, default="17:00")         # format HH:MM
+    photo_url = Column(String, nullable=True)                 # URL ou chemin de la photo de profil
     code_pin = Column(String)                                # securise l'appel du suivant
     is_active = Column(Boolean, default=True)
     subscription_type = Column(String, default="trial_14d")  # trial, monthly, annual
@@ -51,6 +55,8 @@ class PatientTicket(Base):
     telephone = Column(String, nullable=True)
     statut = Column(String, default="waiting")               # waiting, serving, completed, absent
     created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)              # moment ou le patient est appele (serving)
+    completed_at = Column(DateTime, nullable=True)            # moment ou la consultation se termine
 
 
 Base.metadata.create_all(bind=engine)
@@ -62,7 +68,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="TAFWITA API",
     description="API de gestion des files d'attente et des abonnements pour cabinets medicaux",
-    version="1.0.0",
+    version="1.1.0",
 )
 
 app.add_middleware(
@@ -91,6 +97,13 @@ class CabinetRegister(BaseModel):
     telephone: str
     wilaya: str
     code_pin: str
+
+
+class CabinetSettingsUpdate(BaseModel):
+    adresse: Optional[str] = None
+    heure_ouverture: Optional[str] = None
+    heure_fermeture: Optional[str] = None
+    photo_url: Optional[str] = None
 
 
 class PatientTicketCreate(BaseModel):
@@ -207,6 +220,10 @@ def get_queue_state(cabinet_slug: str, db: Session = Depends(get_db)):
     return {
         "cabinet_name": cabinet.nom_medecin,
         "specialite": cabinet.specialite,
+        "adresse": cabinet.adresse,
+        "heure_ouverture": cabinet.heure_ouverture,
+        "heure_fermeture": cabinet.heure_fermeture,
+        "photo_url": cabinet.photo_url,
         "serving_num": cabinet.serving_num,
         "display_serving": f"N° P-{cabinet.serving_num:02d}",
         "total_issued": cabinet.total_issued,
@@ -224,8 +241,28 @@ def call_next(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
     if cabinet.code_pin != pin:
         raise HTTPException(status_code=403, detail="Code PIN incorrect.")
 
+    # Marquer le ticket precedent (en cours) comme termine automatiquement, avec horodatage
+    previous_ticket = (
+        db.query(PatientTicket)
+        .filter(PatientTicket.cabinet_slug == cabinet_slug, PatientTicket.statut == "serving")
+        .first()
+    )
+    if previous_ticket:
+        previous_ticket.statut = "completed"
+        previous_ticket.completed_at = datetime.utcnow()
+
     if cabinet.serving_num < cabinet.total_issued:
         cabinet.serving_num += 1
+
+        next_ticket = (
+            db.query(PatientTicket)
+            .filter(PatientTicket.cabinet_slug == cabinet_slug, PatientTicket.ticket_num == cabinet.serving_num)
+            .first()
+        )
+        if next_ticket:
+            next_ticket.statut = "serving"
+            next_ticket.started_at = datetime.utcnow()
+
         db.commit()
 
     return {
@@ -235,7 +272,7 @@ def call_next(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
     }
 
 
-# F. Liste des tickets en attente (pour la console desktop du cabinet)
+# F. Liste des tickets en attente / historique (pour la console desktop du cabinet)
 @app.get("/api/cabinets/{cabinet_slug}/tickets")
 def list_tickets(cabinet_slug: str, db: Session = Depends(get_db)):
     cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
@@ -246,17 +283,12 @@ def list_tickets(cabinet_slug: str, db: Session = Depends(get_db)):
         db.query(PatientTicket)
         .filter(PatientTicket.cabinet_slug == cabinet_slug)
         .order_by(PatientTicket.ticket_num.desc())
-        .limit(50)
+        .limit(200)
         .all()
     )
 
-    return [
-        {
-            "ticket_num": t.ticket_num,
-            "nom_patient": t.nom_patient,
-            "telephone": t.telephone,
-            "statut": t.statut,
-            "created_at": t.created_at.isoformat(),
-        }
-        for t in tickets
-    ]
+    result = []
+    for t in tickets:
+        duree_min = None
+        if t.started_at and t.completed_at:
+            duree_min = round((t.completed_at - t.st
