@@ -28,18 +28,18 @@ class Cabinet(Base):
     __tablename__ = "cabinets"
 
     id = Column(Integer, primary_key=True, index=True)
-    slug = Column(String, unique=True, index=True)          # ex: "dr-benali"
+    slug = Column(String, unique=True, index=True)
     nom_medecin = Column(String)
     specialite = Column(String)
     telephone = Column(String, unique=True)
     wilaya = Column(String)
-    adresse = Column(String, nullable=True)                  # adresse complete du cabinet
-    heure_ouverture = Column(String, default="08:00")         # format HH:MM
-    heure_fermeture = Column(String, default="17:00")         # format HH:MM
-    photo_url = Column(String, nullable=True)                 # URL ou chemin de la photo de profil
-    code_pin = Column(String)                                # securise l'appel du suivant
+    adresse = Column(String, nullable=True)
+    heure_ouverture = Column(String, default="08:00")
+    heure_fermeture = Column(String, default="17:00")
+    photo_url = Column(String, nullable=True)
+    code_pin = Column(String)
     is_active = Column(Boolean, default=True)
-    subscription_type = Column(String, default="trial_14d")  # trial, monthly, annual
+    subscription_type = Column(String, default="trial_14d")
     subscription_end = Column(DateTime)
     serving_num = Column(Integer, default=0)
     total_issued = Column(Integer, default=0)
@@ -53,10 +53,10 @@ class PatientTicket(Base):
     ticket_num = Column(Integer)
     nom_patient = Column(String)
     telephone = Column(String, nullable=True)
-    statut = Column(String, default="waiting")               # waiting, serving, completed, absent
+    statut = Column(String, default="waiting")
     created_at = Column(DateTime, default=datetime.utcnow)
-    started_at = Column(DateTime, nullable=True)              # moment ou le patient est appele (serving)
-    completed_at = Column(DateTime, nullable=True)            # moment ou la consultation se termine
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
 
 
 Base.metadata.create_all(bind=engine)
@@ -120,7 +120,6 @@ def home():
     return {"message": "API TAFWITA connectee a PostgreSQL avec succes."}
 
 
-# A. Inscription d'un nouveau cabinet medical (client B2B)
 @app.post("/api/cabinets/register")
 def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
     slug = data.nom_medecin.lower().replace(" ", "-").replace(".", "")
@@ -149,12 +148,11 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
         "status": "success",
         "message": "Cabinet cree avec succes ! 14 jours d'essai actives.",
         "cabinet_slug": cabinet.slug,
-        "tv_url": f"/tv?cabinet={cabinet.slug}",
+        "tv_url": "/tv?cabinet=" + cabinet.slug,
         "trial_end": trial_end.strftime("%Y-%m-%d"),
     }
 
 
-# B. Prise de ticket par un patient (app mobile ou site)
 @app.post("/api/tickets/take")
 def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
     cabinet = db.query(Cabinet).filter(Cabinet.slug == data.cabinet_slug).first()
@@ -177,13 +175,12 @@ def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
     return {
         "status": "success",
         "ticket_num": cabinet.total_issued,
-        "display_ticket": f"N° P-{cabinet.total_issued:02d}",
+        "display_ticket": "N. P-" + format(cabinet.total_issued, "02d"),
         "waiting_before_you": max(0, waiting - 1),
         "estimated_wait_min": max(0, waiting - 1) * 12,
     }
 
 
-# C. Ajout manuel d'un ticket papier (cote cabinet, pour patients sans smartphone)
 @app.post("/api/tickets/add-manual")
 def add_manual_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
     cabinet = db.query(Cabinet).filter(Cabinet.slug == data.cabinet_slug).first()
@@ -204,11 +201,10 @@ def add_manual_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
     return {
         "status": "success",
         "ticket_num": cabinet.total_issued,
-        "display_ticket": f"N° P-{cabinet.total_issued:02d}",
+        "display_ticket": "N. P-" + format(cabinet.total_issued, "02d"),
     }
 
 
-# D. Etat en direct de la file (ecran TV & application patient)
 @app.get("/api/queue/{cabinet_slug}")
 def get_queue_state(cabinet_slug: str, db: Session = Depends(get_db)):
     cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
@@ -225,14 +221,13 @@ def get_queue_state(cabinet_slug: str, db: Session = Depends(get_db)):
         "heure_fermeture": cabinet.heure_fermeture,
         "photo_url": cabinet.photo_url,
         "serving_num": cabinet.serving_num,
-        "display_serving": f"N° P-{cabinet.serving_num:02d}",
+        "display_serving": "N. P-" + format(cabinet.serving_num, "02d"),
         "total_issued": cabinet.total_issued,
         "waiting_count": waiting,
         "is_active": cabinet.is_active,
     }
 
 
-# E. Appeler le patient suivant (securise par code PIN du medecin/secretaire)
 @app.post("/api/queue/{cabinet_slug}/next")
 def call_next(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
     cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
@@ -241,7 +236,6 @@ def call_next(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
     if cabinet.code_pin != pin:
         raise HTTPException(status_code=403, detail="Code PIN incorrect.")
 
-    # Marquer le ticket precedent (en cours) comme termine automatiquement, avec horodatage
     previous_ticket = (
         db.query(PatientTicket)
         .filter(PatientTicket.cabinet_slug == cabinet_slug, PatientTicket.statut == "serving")
@@ -268,11 +262,10 @@ def call_next(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
     return {
         "status": "success",
         "serving_num": cabinet.serving_num,
-        "display_serving": f"N° P-{cabinet.serving_num:02d}",
+        "display_serving": "N. P-" + format(cabinet.serving_num, "02d"),
     }
 
 
-# F. Liste des tickets en attente / historique (pour la console desktop du cabinet)
 @app.get("/api/cabinets/{cabinet_slug}/tickets")
 def list_tickets(cabinet_slug: str, db: Session = Depends(get_db)):
     cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
@@ -290,5 +283,27 @@ def list_tickets(cabinet_slug: str, db: Session = Depends(get_db)):
     result = []
     for t in tickets:
         duree_min = None
-        if t.started_at and t.completed_at:
-            duree_min = round((t.completed_at - t.st
+        if t.started_at is not None and t.completed_at is not None:
+            delta_seconds = (t.completed_at - t.started_at).total_seconds()
+            duree_min = round(delta_seconds / 60, 1)
+
+        result.append({
+            "id": t.id,
+            "ticket_num": t.ticket_num,
+            "nom_patient": t.nom_patient,
+            "telephone": t.telephone,
+            "statut": t.statut,
+            "created_at": t.created_at.isoformat(),
+            "started_at": t.started_at.isoformat() if t.started_at else None,
+            "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            "duree_min": duree_min,
+        })
+
+    return result
+
+
+@app.put("/api/cabinets/{cabinet_slug}/settings")
+def update_cabinet_settings(cabinet_slug: str, pin: str, data: CabinetSettingsUpdate, db: Session = Depends(get_db)):
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404,
