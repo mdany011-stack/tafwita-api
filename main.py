@@ -2,15 +2,12 @@ import os
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, or_
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-# ----------------------------------------------------------------------
-# 1. Connexion a PostgreSQL (Render fournit DATABASE_URL automatiquement)
-# ----------------------------------------------------------------------
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
@@ -21,9 +18,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
-# ----------------------------------------------------------------------
-# 2. Modeles de la base de donnees
-# ----------------------------------------------------------------------
 class Cabinet(Base):
     __tablename__ = "cabinets"
 
@@ -61,14 +55,10 @@ class PatientTicket(Base):
 
 Base.metadata.create_all(bind=engine)
 
-
-# ----------------------------------------------------------------------
-# 3. Application FastAPI
-# ----------------------------------------------------------------------
 app = FastAPI(
     title="TAFWITA API",
-    description="API de gestion des files d'attente et des abonnements pour cabinets medicaux",
-    version="1.1.0",
+    description="API de gestion de file d'attente pour cabinets medicaux",
+    version="1.2.0",
 )
 
 app.add_middleware(
@@ -88,9 +78,6 @@ def get_db():
         db.close()
 
 
-# ----------------------------------------------------------------------
-# 4. Schemas de validation (Pydantic)
-# ----------------------------------------------------------------------
 class CabinetRegister(BaseModel):
     nom_medecin: str
     specialite: str
@@ -112,12 +99,62 @@ class PatientTicketCreate(BaseModel):
     telephone: Optional[str] = None
 
 
-# ----------------------------------------------------------------------
-# 5. Endpoints API
-# ----------------------------------------------------------------------
+def cabinet_public_data(cabinet):
+    waiting = max(0, cabinet.total_issued - cabinet.serving_num)
+    return {
+        "id": cabinet.id,
+        "slug": cabinet.slug,
+        "nom_medecin": cabinet.nom_medecin,
+        "specialite": cabinet.specialite,
+        "telephone": cabinet.telephone,
+        "wilaya": cabinet.wilaya,
+        "adresse": cabinet.adresse,
+        "heure_ouverture": cabinet.heure_ouverture,
+        "heure_fermeture": cabinet.heure_fermeture,
+        "photo_url": cabinet.photo_url,
+        "waiting_count": waiting,
+        "is_active": cabinet.is_active,
+    }
+
+
 @app.get("/")
 def home():
     return {"message": "API TAFWITA connectee a PostgreSQL avec succes."}
+
+
+# Liste publique et recherchable des cabinets pour l'application patient.
+@app.get("/api/cabinets")
+def list_public_cabinets(
+    q: Optional[str] = Query(default=None, max_length=100),
+    specialite: Optional[str] = Query(default=None, max_length=100),
+    wilaya: Optional[str] = Query(default=None, max_length=100),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Cabinet).filter(Cabinet.is_active.is_(True))
+
+    if q:
+        pattern = "%" + q.strip() + "%"
+        query = query.filter(or_(
+            Cabinet.nom_medecin.ilike(pattern),
+            Cabinet.specialite.ilike(pattern),
+            Cabinet.wilaya.ilike(pattern),
+            Cabinet.adresse.ilike(pattern),
+        ))
+    if specialite:
+        query = query.filter(Cabinet.specialite.ilike("%" + specialite.strip() + "%"))
+    if wilaya:
+        query = query.filter(Cabinet.wilaya.ilike("%" + wilaya.strip() + "%"))
+
+    cabinets = query.order_by(Cabinet.nom_medecin.asc()).limit(100).all()
+    return [cabinet_public_data(c) for c in cabinets]
+
+
+@app.get("/api/cabinets/{cabinet_slug}/public")
+def get_public_cabinet(cabinet_slug: str, db: Session = Depends(get_db)):
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug, Cabinet.is_active.is_(True)).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet introuvable.")
+    return cabinet_public_data(cabinet)
 
 
 @app.post("/api/cabinets/register")
@@ -128,8 +165,11 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Ce numero de telephone est deja enregistre.")
 
-    trial_end = datetime.utcnow() + timedelta(days=14)
+    existing_slug = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if existing_slug:
+        slug = slug + "-" + str(int(datetime.utcnow().timestamp()))
 
+    trial_end = datetime.utcnow() + timedelta(days=14)
     cabinet = Cabinet(
         slug=slug,
         nom_medecin=data.nom_medecin,
@@ -139,7 +179,6 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
         code_pin=data.code_pin,
         subscription_end=trial_end,
     )
-
     db.add(cabinet)
     db.commit()
     db.refresh(cabinet)
@@ -155,9 +194,9 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
 
 @app.post("/api/tickets/take")
 def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
-    cabinet = db.query(Cabinet).filter(Cabinet.slug == data.cabinet_slug).first()
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == data.cabinet_slug, Cabinet.is_active.is_(True)).first()
     if not cabinet:
-        raise HTTPException(status_code=404, detail="Cabinet introuvable.")
+        raise HTTPException(status_code=404, detail="Cabinet introuvable ou ferme.")
 
     cabinet.total_issued += 1
     new_ticket = PatientTicket(
@@ -166,14 +205,14 @@ def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
         nom_patient=data.nom_patient,
         telephone=data.telephone,
     )
-
     db.add(new_ticket)
     db.commit()
+    db.refresh(new_ticket)
 
     waiting = max(0, cabinet.total_issued - cabinet.serving_num)
-
     return {
         "status": "success",
+        "ticket_id": new_ticket.id,
         "ticket_num": cabinet.total_issued,
         "display_ticket": "N. P-" + format(cabinet.total_issued, "02d"),
         "waiting_before_you": max(0, waiting - 1),
@@ -194,12 +233,13 @@ def add_manual_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
         nom_patient=data.nom_patient or "Patient (guichet)",
         telephone=data.telephone,
     )
-
     db.add(new_ticket)
     db.commit()
+    db.refresh(new_ticket)
 
     return {
         "status": "success",
+        "ticket_id": new_ticket.id,
         "ticket_num": cabinet.total_issued,
         "display_ticket": "N. P-" + format(cabinet.total_issued, "02d"),
     }
@@ -212,7 +252,6 @@ def get_queue_state(cabinet_slug: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Cabinet introuvable.")
 
     waiting = max(0, cabinet.total_issued - cabinet.serving_num)
-
     return {
         "cabinet_name": cabinet.nom_medecin,
         "specialite": cabinet.specialite,
@@ -236,27 +275,23 @@ def call_next(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
     if cabinet.code_pin != pin:
         raise HTTPException(status_code=403, detail="Code PIN incorrect.")
 
-    previous_ticket = (
-        db.query(PatientTicket)
-        .filter(PatientTicket.cabinet_slug == cabinet_slug, PatientTicket.statut == "serving")
-        .first()
-    )
+    previous_ticket = db.query(PatientTicket).filter(
+        PatientTicket.cabinet_slug == cabinet_slug,
+        PatientTicket.statut == "serving",
+    ).first()
     if previous_ticket:
         previous_ticket.statut = "completed"
         previous_ticket.completed_at = datetime.utcnow()
 
     if cabinet.serving_num < cabinet.total_issued:
         cabinet.serving_num += 1
-
-        next_ticket = (
-            db.query(PatientTicket)
-            .filter(PatientTicket.cabinet_slug == cabinet_slug, PatientTicket.ticket_num == cabinet.serving_num)
-            .first()
-        )
+        next_ticket = db.query(PatientTicket).filter(
+            PatientTicket.cabinet_slug == cabinet_slug,
+            PatientTicket.ticket_num == cabinet.serving_num,
+        ).first()
         if next_ticket:
             next_ticket.statut = "serving"
             next_ticket.started_at = datetime.utcnow()
-
         db.commit()
 
     return {
@@ -272,21 +307,15 @@ def list_tickets(cabinet_slug: str, db: Session = Depends(get_db)):
     if not cabinet:
         raise HTTPException(status_code=404, detail="Cabinet introuvable.")
 
-    tickets = (
-        db.query(PatientTicket)
-        .filter(PatientTicket.cabinet_slug == cabinet_slug)
-        .order_by(PatientTicket.ticket_num.desc())
-        .limit(200)
-        .all()
-    )
+    tickets = db.query(PatientTicket).filter(
+        PatientTicket.cabinet_slug == cabinet_slug
+    ).order_by(PatientTicket.ticket_num.desc()).limit(200).all()
 
     result = []
     for t in tickets:
         duree_min = None
         if t.started_at is not None and t.completed_at is not None:
-            delta_seconds = (t.completed_at - t.started_at).total_seconds()
-            duree_min = round(delta_seconds / 60, 1)
-
+            duree_min = round((t.completed_at - t.started_at).total_seconds() / 60, 1)
         result.append({
             "id": t.id,
             "ticket_num": t.ticket_num,
@@ -298,7 +327,6 @@ def list_tickets(cabinet_slug: str, db: Session = Depends(get_db)):
             "completed_at": t.completed_at.isoformat() if t.completed_at else None,
             "duree_min": duree_min,
         })
-
     return result
 
 
@@ -318,7 +346,6 @@ def update_cabinet_settings(cabinet_slug: str, pin: str, data: CabinetSettingsUp
         cabinet.heure_fermeture = data.heure_fermeture
     if data.photo_url is not None:
         cabinet.photo_url = data.photo_url
-
     db.commit()
 
     return {
@@ -335,18 +362,11 @@ def complete_ticket(ticket_id: int, db: Session = Depends(get_db)):
     ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket introuvable.")
-
     if not ticket.started_at:
         ticket.started_at = datetime.utcnow()
     ticket.completed_at = datetime.utcnow()
     ticket.statut = "completed"
     db.commit()
 
-    delta_seconds = (ticket.completed_at - ticket.started_at).total_seconds()
-    duree_min = round(delta_seconds / 60, 1)
-
-    return {
-        "status": "success",
-        "ticket_num": ticket.ticket_num,
-        "duree_min": duree_min,
-    }
+    duree_min = round((ticket.completed_at - ticket.started_at).total_seconds() / 60, 1)
+    return {"status": "success", "ticket_num": ticket.ticket_num, "duree_min": duree_min}
