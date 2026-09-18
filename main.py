@@ -1,102 +1,131 @@
+"""TAFWITA API v7 - main.py
+Mise à jour avec :
+1. Clôıııture de journée (annulation tickets + notification patients)
+2. Arrêııîııt / Reprise de la prise de tickets (accept_tickets)
+
+Installation :
+pip install fastapi uvicorn sqlalchemy pydantic python-dotenv
+
+Variables d'environnement (.env) :
+DATABASE_URL=postgresql://user:password@host:port/dbname
+"""
+
 import os
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime, date
+from typing import Optional, List
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Text, or_, func
-from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from pydantic import BaseModel
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, func
+from sqlalchemy.orm import sessionmaker, Session, declarative_base, relationship
 
-# ============================================================
-# CONFIGURATION POSTGRESQL / RENDER
-# ============================================================
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-engine = create_engine(DATABASE_URL or "sqlite:///./fallback.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost/tafwita")
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-
-# ============================================================
-# MODELES
-# ============================================================
+# ============================================================================
+# MODÈıîııLES DE DONNÉıîııES
+# ============================================================================
 
 class Cabinet(Base):
     __tablename__ = "cabinets"
 
     id = Column(Integer, primary_key=True, index=True)
-    slug = Column(String, unique=True, index=True)
-    nom_medecin = Column(String)
-    specialite = Column(String)
-    telephone = Column(String, unique=True)
-    wilaya = Column(String)
+    slug = Column(String, unique=True, index=True, nullable=False)
+    nom = Column(String, nullable=False)
+    code_pin = Column(String, nullable=False)
     adresse = Column(String, nullable=True)
-    heure_ouverture = Column(String, default="08:00")
-    heure_fermeture = Column(String, default="17:00")
+    heure_ouverture = Column(String, nullable=True)
+    heure_fermeture = Column(String, nullable=True)
     photo_url = Column(String, nullable=True)
-    code_pin = Column(String)
-    is_active = Column(Boolean, default=True)
-    subscription_type = Column(String, default="trial_14d")
-    subscription_end = Column(DateTime)
-    serving_num = Column(Integer, default=0)
-    total_issued = Column(Integer, default=0)
+    accept_tickets = Column(Boolean, default=True)  # NOUVEAU CHAMP v7
+
+    tickets = relationship("Ticket", back_populates="cabinet")
 
 
-class PatientTicket(Base):
-    __tablename__ = "patient_tickets"
+class Ticket(Base):
+    __tablename__ = "tickets"
 
     id = Column(Integer, primary_key=True, index=True)
-    cabinet_slug = Column(String, index=True)
-    ticket_num = Column(Integer)
-    queue_order = Column(Integer, index=True, nullable=True)
-    nom_patient = Column(String)
+    cabinet_slug = Column(String, ForeignKey("cabinets.slug"), nullable=False)
+    user_id = Column(Integer, nullable=True)  # NULL si ticket papier
+    nom_patient = Column(String, nullable=False)
     telephone = Column(String, nullable=True)
-    statut = Column(String, default="waiting")
-    priority_level = Column(String, default="normal")
-    urgent_request_status = Column(String, nullable=True)
-    urgent_reason = Column(String, nullable=True)
+    ticket_num = Column(Integer, nullable=False)
+    statut = Column(String, default="waiting")  # waiting, serving, suspended, returned, completed, cancelled
+    duree_min = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    called_at = Column(DateTime, nullable=True)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
-    suspended_at = Column(DateTime, nullable=True)
-    presence_confirmed_at = Column(DateTime, nullable=True)
-    cancelled_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    cabinet = relationship("Cabinet", back_populates="tickets")
+    events = relationship("TicketEvent", back_populates="ticket")
 
 
 class TicketEvent(Base):
     __tablename__ = "ticket_events"
 
     id = Column(Integer, primary_key=True, index=True)
-    ticket_id = Column(Integer, index=True)
-    cabinet_slug = Column(String, index=True)
-    event_type = Column(String, index=True)
-    previous_status = Column(String, nullable=True)
-    new_status = Column(String, nullable=True)
-    actor_type = Column(String)
-    actor_name = Column(String, nullable=True)
+    ticket_id = Column(Integer, ForeignKey("tickets.id"), nullable=False)
+    event_type = Column(String, nullable=False)  # created, called, suspended, returned, completed, cancelled, day_closed, etc.
     reason_code = Column(String, nullable=True)
-    reason_note = Column(Text, nullable=True)
+    reason_note = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    ticket = relationship("Ticket", back_populates="events")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    title = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    is_read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
-Base.metadata.create_all(bind=engine)
+# ============================================================================
+# SCHÉıîııMAS PYDANTIC
+# ============================================================================
+
+class CabinetSettingsUpdate(BaseModel):
+    adresse: Optional[str] = None
+    heure_ouverture: Optional[str] = None
+    heure_fermeture: Optional[str] = None
+    accept_tickets: Optional[bool] = None
+    photo_url: Optional[str] = None
 
 
-# ============================================================
+class CloseDayRequest(BaseModel):
+    reason: str = "cabinet_closed"
+    notify_patients: bool = True
+
+
+class VerifyPinRequest(BaseModel):
+    code_pin: str
+
+
+class AddManualTicketRequest(BaseModel):
+    cabinet_slug: str
+    nom_patient: str
+    telephone: Optional[str] = None
+
+
+# ============================================================================
 # APPLICATION FASTAPI
-# ============================================================
+# ============================================================================
 
-app = FastAPI(
-    title="TAFWITA API",
-    description="API de gestion equitable de file d attente medicale",
-    version="2.1.0",
-)
+app = FastAPI(title="TAFWITA API", version="7.0.0")
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -106,6 +135,10 @@ app.add_middleware(
 )
 
 
+# ============================================================================
+# DÉí»ıíııPENDANCES
+# ============================================================================
+
 def get_db():
     db = SessionLocal()
     try:
@@ -114,548 +147,579 @@ def get_db():
         db.close()
 
 
-# ============================================================
-# SCHEMAS
-# ============================================================
+# ============================================================================
+# ENDPOINTS - CABINETS
+# ============================================================================
 
-class CabinetRegister(BaseModel):
-    nom_medecin: str
-    specialite: str
-    telephone: str
-    wilaya: str
-    code_pin: str
-
-
-class PinVerifyRequest(BaseModel):
-    code_pin: str
-
-
-class CabinetSettingsUpdate(BaseModel):
-    adresse: Optional[str] = None
-    heure_ouverture: Optional[str] = None
-    heure_fermeture: Optional[str] = None
-    photo_url: Optional[str] = None
-
-
-class PatientTicketCreate(BaseModel):
-    cabinet_slug: str
-    nom_patient: str = Field(min_length=2, max_length=100)
-    telephone: Optional[str] = Field(default=None, max_length=30)
-
-
-class PatientTicketAction(BaseModel):
-    reason_code: Optional[str] = None
-    reason_note: Optional[str] = Field(default=None, max_length=500)
-
-
-class CabinetTicketAction(BaseModel):
-    code_pin: str
-    reason_code: Optional[str] = None
-    reason_note: Optional[str] = Field(default=None, max_length=500)
-
-
-class UrgentAction(BaseModel):
-    code_pin: str
-    urgent_reason: str = Field(min_length=3, max_length=500)
-    reason_note: Optional[str] = Field(default=None, max_length=500)
-
-
-# ============================================================
-# OUTILS
-# ============================================================
-
-def get_cabinet(db, cabinet_slug):
-    cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
+@app.post("/api/cabinets/{slug}/verify-pin")
+async def verify_cabinet_pin(
+    slug: str,
+    request: VerifyPinRequest,
+    db: Session = Depends(get_db)
+):
+    """Véı»iifie le PIN du cabinet"""
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
     if not cabinet:
-        raise HTTPException(status_code=404, detail="Cabinet introuvable.")
-    return cabinet
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
 
+    if cabinet.code_pin != request.code_pin:
+        raise HTTPException(status_code=403, detail="PIN incorrect")
 
-def require_pin(cabinet, pin):
-    if cabinet.code_pin != pin:
-        raise HTTPException(status_code=403, detail="Code PIN incorrect.")
-
-
-def add_event(db, ticket, event_type, old_status, new_status, actor_type, actor_name=None, reason_code=None, reason_note=None):
-    db.add(TicketEvent(
-        ticket_id=ticket.id,
-        cabinet_slug=ticket.cabinet_slug,
-        event_type=event_type,
-        previous_status=old_status,
-        new_status=new_status,
-        actor_type=actor_type,
-        actor_name=actor_name,
-        reason_code=reason_code,
-        reason_note=reason_note,
-    ))
-
-
-def next_order(db, cabinet_slug):
-    maximum = db.query(func.max(PatientTicket.queue_order)).filter(
-        PatientTicket.cabinet_slug == cabinet_slug,
-        PatientTicket.queue_order.isnot(None),
-    ).scalar()
-    return (maximum or 0) + 1
-
-
-def queue_status_filter():
-    return PatientTicket.statut.in_(["waiting", "returned", "urgent"])
-
-
-def ticket_to_dict(ticket):
     return {
-        "id": ticket.id,
-        "cabinet_slug": ticket.cabinet_slug,
-        "ticket_num": ticket.ticket_num,
-        "queue_order": ticket.queue_order,
-        "nom_patient": ticket.nom_patient,
-        "telephone": ticket.telephone,
-        "statut": ticket.statut,
-        "priority_level": ticket.priority_level,
-        "urgent_request_status": ticket.urgent_request_status,
-        "urgent_reason": ticket.urgent_reason,
-        "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
-        "called_at": ticket.called_at.isoformat() if ticket.called_at else None,
-        "started_at": ticket.started_at.isoformat() if ticket.started_at else None,
-        "completed_at": ticket.completed_at.isoformat() if ticket.completed_at else None,
-        "suspended_at": ticket.suspended_at.isoformat() if ticket.suspended_at else None,
-        "presence_confirmed_at": ticket.presence_confirmed_at.isoformat() if ticket.presence_confirmed_at else None,
-        "cancelled_at": ticket.cancelled_at.isoformat() if ticket.cancelled_at else None,
+        "cabinet_slug": cabinet.slug,
+        "cabinet_nom": cabinet.nom,
+        "code_pin": cabinet.code_pin
     }
 
 
-def public_cabinet_dict(cabinet, db):
-    waiting = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet.slug,
-        queue_status_filter(),
-    ).count()
+@app.put("/api/cabinets/{slug}/settings")
+async def update_cabinet_settings(
+    slug: str,
+    pin: str = Query(...),
+    payload: CabinetSettingsUpdate = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Met à jour les paramètres du cabinet (adresse, horaires, accept_tickets)"""
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
+
+    # Véí»ıifie le PIN
+    if cabinet.code_pin != pin:
+        raise HTTPException(status_code=403, detail="PIN incorrect")
+
+    # Met à jour les champs optionnels
+    if payload.adresse is not None:
+        cabinet.adresse = payload.adresse
+    if payload.heure_ouverture is not None:
+        cabinet.heure_ouverture = payload.heure_ouverture
+    if payload.heure_fermeture is not None:
+        cabinet.heure_fermeture = payload.heure_fermeture
+    if payload.accept_tickets is not None:
+        cabinet.accept_tickets = payload.accept_tickets
+    if payload.photo_url is not None:
+        cabinet.photo_url = payload.photo_url
+
+    db.commit()
+    db.refresh(cabinet)
+
     return {
-        "id": cabinet.id,
+        "message": "Paramèııtres mis à jour",
+        "cabinet": {
+            "slug": cabinet.slug,
+            "nom": cabinet.nom,
+            "adresse": cabinet.adresse,
+            "heure_ouverture": cabinet.heure_ouverture,
+            "heure_fermeture": cabinet.heure_fermeture,
+            "accept_tickets": cabinet.accept_tickets
+        }
+    }
+
+
+@app.get("/api/cabinets/{slug}/settings")
+async def get_cabinet_settings(
+    slug: str,
+    pin: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Rôıııcupèııre les paramètres du cabinet"""
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
+
+    if cabinet.code_pin != pin:
+        raise HTTPException(status_code=403, detail="PIN incorrect")
+
+    return {
         "slug": cabinet.slug,
-        "nom_medecin": cabinet.nom_medecin,
-        "specialite": cabinet.specialite,
-        "telephone": cabinet.telephone,
-        "wilaya": cabinet.wilaya,
+        "nom": cabinet.nom,
         "adresse": cabinet.adresse,
         "heure_ouverture": cabinet.heure_ouverture,
         "heure_fermeture": cabinet.heure_fermeture,
-        "photo_url": cabinet.photo_url,
-        "waiting_count": waiting,
-        "is_active": cabinet.is_active,
+        "accept_tickets": cabinet.accept_tickets,
+        "photo_url": cabinet.photo_url
     }
 
 
-# ============================================================
-# SANTE ET LISTE PUBLIQUE
-# ============================================================
-
-@app.get("/")
-def home():
-    return {"message": "API TAFWITA v2.1 connectee a PostgreSQL avec succes."}
-
-
-@app.get("/api/cabinets")
-def list_cabinets(
-    q: Optional[str] = Query(default=None, max_length=100),
-    specialite: Optional[str] = Query(default=None, max_length=100),
-    wilaya: Optional[str] = Query(default=None, max_length=100),
-    db: Session = Depends(get_db),
+@app.post("/api/cabinets/{slug}/close-day")
+async def close_cabinet_day(
+    slug: str,
+    pin: str = Query(...),
+    payload: CloseDayRequest = Body(...),
+    db: Session = Depends(get_db)
 ):
-    query = db.query(Cabinet).filter(Cabinet.is_active.is_(True))
-    if q:
-        pattern = "%" + q.strip() + "%"
-        query = query.filter(or_(
-            Cabinet.nom_medecin.ilike(pattern),
-            Cabinet.specialite.ilike(pattern),
-            Cabinet.wilaya.ilike(pattern),
-            Cabinet.adresse.ilike(pattern),
-        ))
-    if specialite:
-        query = query.filter(Cabinet.specialite.ilike("%" + specialite.strip() + "%"))
-    if wilaya:
-        query = query.filter(Cabinet.wilaya.ilike("%" + wilaya.strip() + "%"))
-    cabinets = query.order_by(Cabinet.nom_medecin.asc()).limit(100).all()
-    return [public_cabinet_dict(cabinet, db) for cabinet in cabinets]
+    """
+    Clôıııture la journôıııe - annule tous les tickets en attente et notifie les patients
+    """
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
 
+    # Véí»ıifie le PIN
+    if cabinet.code_pin != pin:
+        raise HTTPException(status_code=403, detail="PIN incorrect")
 
-@app.get("/api/cabinets/{cabinet_slug}/public")
-def cabinet_public(cabinet_slug: str, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, cabinet_slug)
-    if not cabinet.is_active:
-        raise HTTPException(status_code=404, detail="Cabinet indisponible.")
-    return public_cabinet_dict(cabinet, db)
+    # Rôıııcupèııre les tickets du jour en attente
+    today = datetime.now().date()
+    pending_tickets = db.query(Ticket).filter(
+        Ticket.cabinet_slug == slug,
+        Ticket.statut.in_(["waiting", "suspended", "returned", "serving"]),
+        func.date(Ticket.created_at) == today
+    ).all()
 
+    closed_count = 0
+    notified_count = 0
 
-# ============================================================
-# CABINET : INSCRIPTION, CONNEXION, PARAMETRES
-# ============================================================
+    for ticket in pending_tickets:
+        # Annuler le ticket
+        ticket.statut = "cancelled"
 
-@app.post("/api/cabinets/register")
-def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
-    if db.query(Cabinet).filter(Cabinet.telephone == data.telephone).first():
-        raise HTTPException(status_code=400, detail="Ce numero de telephone est deja enregistre.")
+        # Créíııer un ôíııvéııinement
+        event = TicketEvent(
+            ticket_id=ticket.id,
+            event_type="day_closed",
+            reason_code=payload.reason,
+            reason_note="Cabinet fermé pour aujourd'hui"
+        )
+        db.add(event)
 
-    slug = data.nom_medecin.lower().replace(" ", "-").replace(".", "")
-    if db.query(Cabinet).filter(Cabinet.slug == slug).first():
-        slug = slug + "-" + str(int(datetime.utcnow().timestamp()))
+        closed_count += 1
 
-    cabinet = Cabinet(
-        slug=slug,
-        nom_medecin=data.nom_medecin,
-        specialite=data.specialite,
-        telephone=data.telephone,
-        wilaya=data.wilaya,
-        code_pin=data.code_pin,
-        subscription_end=datetime.utcnow() + timedelta(days=14),
-    )
-    db.add(cabinet)
+        # Notifier le patient si demandé
+        if payload.notify_patients and ticket.user_id:
+            try:
+                notification = Notification(
+                    user_id=ticket.user_id,
+                    title="Ticket annuléıı",
+                    message=f"Votre ticket P-{str(ticket.ticket_num).zfill(2)} a été annuléıı car le cabinet a fermé pour aujourd'hui."
+                )
+                db.add(notification)
+                notified_count += 1
+            except Exception as e:
+                # Logger l'erreur mais continuer
+                print(f"Erreur notification ticket {ticket.id}: {e}")
+
     db.commit()
-    db.refresh(cabinet)
+
     return {
-        "status": "success",
-        "cabinet_slug": cabinet.slug,
-        "trial_end": cabinet.subscription_end.strftime("%Y-%m-%d"),
+        "message": "Journôıııe clô1turôıııe avec succèııs",
+        "closed_count": closed_count,
+        "notified_count": notified_count
     }
 
 
-@app.post("/api/cabinets/{cabinet_slug}/verify-pin")
-def verify_pin(cabinet_slug: str, data: PinVerifyRequest, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, cabinet_slug)
-    require_pin(cabinet, data.code_pin)
+# ============================================================================
+# ENDPOINTS - QUEUE
+# ============================================================================
+
+@app.get("/api/queue/{slug}")
+async def get_queue(
+    slug: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Rôıııcupèııre la file d'attente du cabinet
+    Inclut accept_tickets pour l'app desktop v7
+    """
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
+
+    # Rôıııcupèııre les tickets du jour
+    today = datetime.now().date()
+    tickets = db.query(Ticket).filter(
+        Ticket.cabinet_slug == slug,
+        func.date(Ticket.created_at) == today
+    ).all()
+
+    # Calculer les statistiques
+    serving = next((t for t in tickets if t.statut == "serving"), None)
+    waiting_count = len([t for t in tickets if t.statut in ["waiting", "returned"]])
+    total_issued = len(tickets)
+
     return {
-        "status": "success",
-        "cabinet_slug": cabinet.slug,
-        "cabinet_nom": cabinet.nom_medecin,
-        "specialite": cabinet.specialite,
+        "cabinet_slug": slug,
+        "cabinet_nom": cabinet.nom,
+        "display_serving": f"P-{str(serving.ticket_num).zfill(2)}" if serving else "-",
+        "waiting_count": waiting_count,
+        "total_issued": total_issued,
+        "accept_tickets": cabinet.accept_tickets,  # NOUVEAU CHAMP v7
+        "adresse": cabinet.adresse,
+        "heure_ouverture": cabinet.heure_ouverture,
+        "heure_fermeture": cabinet.heure_fermeture
     }
 
 
-@app.put("/api/cabinets/{cabinet_slug}/settings")
-def update_settings(cabinet_slug: str, data: CabinetSettingsUpdate, pin: str, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, cabinet_slug)
-    require_pin(cabinet, pin)
-    if data.adresse is not None:
-        cabinet.adresse = data.adresse
-    if data.heure_ouverture is not None:
-        cabinet.heure_ouverture = data.heure_ouverture
-    if data.heure_fermeture is not None:
-        cabinet.heure_fermeture = data.heure_fermeture
-    if data.photo_url is not None:
-        cabinet.photo_url = data.photo_url
-    db.commit()
-    return {"status": "success", "adresse": cabinet.adresse, "heure_ouverture": cabinet.heure_ouverture, "heure_fermeture": cabinet.heure_fermeture, "photo_url": cabinet.photo_url}
+@app.post("/api/queue/{slug}/next")
+async def call_next_patient(
+    slug: str,
+    pin: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Appelle le patient suivant dans la file"""
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
 
+    if cabinet.code_pin != pin:
+        raise HTTPException(status_code=403, detail="PIN incorrect")
 
-# ============================================================
-# PATIENT : PRISE ET GESTION DU TICKET
-# ============================================================
+    # Trouver le premier ticket en attente
+    next_ticket = db.query(Ticket).filter(
+        Ticket.cabinet_slug == slug,
+        Ticket.statut.in_(["waiting", "returned"])
+    ).order_by(Ticket.ticket_num).first()
 
-@app.post("/api/tickets/take")
-def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, data.cabinet_slug)
-    if not cabinet.is_active:
-        raise HTTPException(status_code=400, detail="Le cabinet est actuellement ferme.")
+    if not next_ticket:
+        return {
+            "message": "Aucun patient en attente",
+            "ticket": None
+        }
 
-    cabinet.total_issued += 1
-    ticket = PatientTicket(
-        cabinet_slug=cabinet.slug,
-        ticket_num=cabinet.total_issued,
-        queue_order=next_order(db, cabinet.slug),
-        nom_patient=data.nom_patient,
-        telephone=data.telephone,
-        statut="waiting",
+    # Mettre à jour le statut
+    next_ticket.statut = "serving"
+
+    # Créíııer un ôíııvéııinement
+    event = TicketEvent(
+        ticket_id=next_ticket.id,
+        event_type="called",
+        reason_note="Appeléıı par le cabinet"
     )
-    db.add(ticket)
-    db.flush()
-    add_event(db, ticket, "created", None, "waiting", "patient", "Patient")
+    db.add(event)
     db.commit()
-    db.refresh(ticket)
 
-    patients_before = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet.slug,
-        queue_status_filter(),
-        PatientTicket.queue_order < ticket.queue_order,
-    ).count()
-    return {"status": "success", "ticket": ticket_to_dict(ticket), "waiting_before_you": patients_before, "estimated_wait_min": patients_before * 12}
+    return {
+        "message": f"Patient P-{str(next_ticket.ticket_num).zfill(2)} appelé",
+        "ticket": {
+            "id": next_ticket.id,
+            "ticket_num": next_ticket.ticket_num,
+            "nom_patient": next_ticket.nom_patient
+        }
+    }
+
+
+# ============================================================================
+# ENDPOINTS - TICKETS
+# ============================================================================
+
+@app.get("/api/cabinets/{slug}/tickets")
+async def get_cabinet_tickets(
+    slug: str,
+    db: Session = Depends(get_db)
+):
+    """Rôıııcupèııre tous les tickets d'un cabinet"""
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
+
+    tickets = db.query(Ticket).filter(Ticket.cabinet_slug == slug).all()
+
+    return [
+        {
+            "id": t.id,
+            "cabinet_slug": t.cabinet_slug,
+            "user_id": t.user_id,
+            "nom_patient": t.nom_patient,
+            "telephone": t.telephone,
+            "ticket_num": t.ticket_num,
+            "statut": t.statut,
+            "duree_min": t.duree_min,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+            "updated_at": t.updated_at.isoformat() if t.updated_at else None
+        }
+        for t in tickets
+    ]
+
+
+@app.get("/api/cabinets/{slug}/alerts")
+async def get_cabinet_alerts(
+    slug: str,
+    pin: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Rôıııcupèııre les alertes du cabinet (prôııısence confirmôıııe, urgences)"""
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
+
+    if cabinet.code_pin != pin:
+        raise HTTPException(status_code=403, detail="PIN incorrect")
+
+    # Rôıııcupôııırer les tickets du jour
+    today = datetime.now().date()
+    tickets = db.query(Ticket).filter(
+        Ticket.cabinet_slug == slug,
+        func.date(Ticket.created_at) == today
+    ).all()
+
+    presence_confirmed = [t for t in tickets if t.statut == "waiting"]
+    urgent_requests = [t for t in tickets if t.statut == "urgent"]
+
+    return {
+        "presence_confirmed": len(presence_confirmed),
+        "urgent_requests": len(urgent_requests)
+    }
 
 
 @app.post("/api/tickets/add-manual")
-def add_manual_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, data.cabinet_slug)
-    cabinet.total_issued += 1
-    ticket = PatientTicket(
-        cabinet_slug=cabinet.slug,
-        ticket_num=cabinet.total_issued,
-        queue_order=next_order(db, cabinet.slug),
-        nom_patient=data.nom_patient,
-        telephone=data.telephone,
-        statut="waiting",
+async def add_manual_ticket(
+    request: AddManualTicketRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Ajoute un ticket papier (manuel) pour un cabinet
+    BLOQUÉıîıı si accept_tickets == False
+    """
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == request.cabinet_slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
+
+    # VÉıîııRIFICATION v7 : Le cabinet accepte-t-il les tickets ?
+    if not cabinet.accept_tickets:
+        raise HTTPException(
+            status_code=400,
+            detail="La prise de tickets est actuellement arrêııîııtôıııe pour ce cabinet."
+        )
+
+    # Trouver le prochain numôıııro de ticket
+    today = datetime.now().date()
+    last_ticket = db.query(Ticket).filter(
+        Ticket.cabinet_slug == request.cabinet_slug,
+        func.date(Ticket.created_at) == today
+    ).order_by(Ticket.ticket_num.desc()).first()
+
+    next_num = (last_ticket.ticket_num + 1) if last_ticket else 1
+
+    # Créíııer le ticket
+    ticket = Ticket(
+        cabinet_slug=request.cabinet_slug,
+        user_id=None,  # Ticket papier
+        nom_patient=request.nom_patient,
+        telephone=request.telephone,
+        ticket_num=next_num,
+        statut="waiting"
     )
     db.add(ticket)
-    db.flush()
-    add_event(db, ticket, "created_manual", None, "waiting", "secretary", cabinet.nom_medecin)
+
+    # Créíııer l'ôıııvéııinement
+    event = TicketEvent(
+        ticket_id=ticket.id,
+        event_type="created",
+        reason_code="manual_add",
+        reason_note="Ticket papier ajoutôııı manuellement"
+    )
+    db.add(event)
     db.commit()
     db.refresh(ticket)
-    return {"status": "success", "ticket": ticket_to_dict(ticket)}
 
-
-@app.get("/api/tickets/{ticket_id}/patient")
-def get_patient_ticket(ticket_id: int, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    before = 0
-    if ticket.statut in ["waiting", "returned", "urgent"] and ticket.queue_order is not None:
-        before = db.query(PatientTicket).filter(
-            PatientTicket.cabinet_slug == ticket.cabinet_slug,
-            queue_status_filter(),
-            PatientTicket.queue_order < ticket.queue_order,
-        ).count()
-    return {"ticket": ticket_to_dict(ticket), "waiting_before_you": before, "estimated_wait_min": before * 12}
-
-
-@app.post("/api/tickets/{ticket_id}/patient-suspend")
-def patient_suspend(ticket_id: int, data: PatientTicketAction, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    if ticket.statut not in ["waiting", "returned"]:
-        raise HTTPException(status_code=400, detail="Ce ticket ne peut pas etre suspendu dans son etat actuel.")
-    old = ticket.statut
-    ticket.statut = "suspended"
-    ticket.suspended_at = datetime.utcnow()
-    ticket.queue_order = None
-    add_event(db, ticket, "patient_requested_delay", old, "suspended", "patient", "Patient", data.reason_code or "patient_late", data.reason_note)
-    db.commit()
-    return {"status": "success", "ticket": ticket_to_dict(ticket)}
-
-
-@app.post("/api/tickets/{ticket_id}/patient-present")
-def patient_present(ticket_id: int, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    if ticket.statut != "suspended":
-        raise HTTPException(status_code=400, detail="Le ticket doit etre suspendu avant confirmation de presence.")
-    ticket.presence_confirmed_at = datetime.utcnow()
-    add_event(db, ticket, "presence_confirmed", "suspended", "suspended", "patient", "Patient")
-    db.commit()
-    return {"status": "success", "message": "Votre presence a ete transmise au cabinet.", "ticket": ticket_to_dict(ticket)}
-
-
-@app.post("/api/tickets/{ticket_id}/patient-cancel")
-def patient_cancel(ticket_id: int, data: PatientTicketAction, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    if ticket.statut in ["serving", "completed", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Ce ticket ne peut plus etre annule.")
-    old = ticket.statut
-    ticket.statut = "cancelled"
-    ticket.cancelled_at = datetime.utcnow()
-    ticket.queue_order = None
-    add_event(db, ticket, "cancelled_by_patient", old, "cancelled", "patient", "Patient", data.reason_code or "patient_cancelled", data.reason_note)
-    db.commit()
-    return {"status": "success", "ticket": ticket_to_dict(ticket)}
-
-
-@app.post("/api/tickets/{ticket_id}/request-urgent")
-def request_urgent(ticket_id: int, data: PatientTicketAction, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    if ticket.statut in ["completed", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Demande impossible pour ce ticket.")
-    ticket.urgent_request_status = "pending"
-    add_event(db, ticket, "urgent_requested", ticket.statut, ticket.statut, "patient", "Patient", "urgent_requested", data.reason_note)
-    db.commit()
-    return {"status": "success", "message": "Demande de priorite transmise au cabinet.", "ticket": ticket_to_dict(ticket)}
-
-
-# ============================================================
-# CABINET : FILE, ALERTES ET ACTIONS
-# ============================================================
-
-@app.get("/api/queue/{cabinet_slug}")
-def queue_state(cabinet_slug: str, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, cabinet_slug)
-    waiting = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet_slug,
-        queue_status_filter(),
-    ).count()
-    current = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet_slug,
-        PatientTicket.statut == "serving",
-    ).first()
-    display = "Aucun patient en cours"
-    if current:
-        display = "N. P-" + format(current.ticket_num, "02d")
     return {
-        "cabinet_name": cabinet.nom_medecin,
-        "specialite": cabinet.specialite,
-        "adresse": cabinet.adresse,
-        "heure_ouverture": cabinet.heure_ouverture,
-        "heure_fermeture": cabinet.heure_fermeture,
-        "photo_url": cabinet.photo_url,
-        "serving_num": cabinet.serving_num,
-        "display_serving": display,
-        "total_issued": cabinet.total_issued,
-        "waiting_count": waiting,
-        "is_active": cabinet.is_active,
+        "message": "Ticket papier ajoutôııı avec succèııs",
+        "ticket": {
+            "id": ticket.id,
+            "ticket_num": ticket.ticket_num,
+            "nom_patient": ticket.nom_patient
+        }
     }
 
 
-@app.get("/api/cabinets/{cabinet_slug}/tickets")
-def cabinet_tickets(cabinet_slug: str, status: Optional[str] = None, db: Session = Depends(get_db)):
-    get_cabinet(db, cabinet_slug)
-    query = db.query(PatientTicket).filter(PatientTicket.cabinet_slug == cabinet_slug)
-    if status:
-        query = query.filter(PatientTicket.statut == status)
-    tickets = query.order_by(
-        PatientTicket.queue_order.is_(None),
-        PatientTicket.queue_order.asc(),
-        PatientTicket.created_at.desc(),
-    ).limit(300).all()
-    return [ticket_to_dict(ticket) for ticket in tickets]
-
-
-@app.get("/api/cabinets/{cabinet_slug}/alerts")
-def cabinet_alerts(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, cabinet_slug)
-    require_pin(cabinet, pin)
-    presence = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet_slug,
-        PatientTicket.statut == "suspended",
-        PatientTicket.presence_confirmed_at.isnot(None),
-    ).order_by(PatientTicket.presence_confirmed_at.desc()).all()
-    urgent = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet_slug,
-        PatientTicket.urgent_request_status == "pending",
-    ).order_by(PatientTicket.created_at.asc()).all()
-    return {"presence_confirmed": [ticket_to_dict(t) for t in presence], "urgent_requests": [ticket_to_dict(t) for t in urgent]}
-
-
-@app.post("/api/tickets/{ticket_id}/suspend")
-def suspend_by_cabinet(ticket_id: int, data: CabinetTicketAction, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
+@app.post("/api/tickets/{ticket_id}/{action}")
+async def ticket_action(
+    ticket_id: int,
+    action: str,
+    payload: dict = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Actions sur un ticket : suspend, return-to-queue, cabinet-cancel, approve-urgent
+    """
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    cabinet = get_cabinet(db, ticket.cabinet_slug)
-    require_pin(cabinet, data.code_pin)
-    if ticket.statut not in ["waiting", "returned"]:
-        raise HTTPException(status_code=400, detail="Ce ticket ne peut pas etre suspendu dans son etat actuel.")
-    old = ticket.statut
-    ticket.statut = "suspended"
-    ticket.suspended_at = datetime.utcnow()
-    ticket.queue_order = None
-    add_event(db, ticket, "suspended_by_cabinet", old, "suspended", "secretary", cabinet.nom_medecin, data.reason_code or "patient_absent", data.reason_note)
-    db.commit()
-    return {"status": "success", "ticket": ticket_to_dict(ticket)}
+        raise HTTPException(status_code=404, detail="Ticket non trouvé")
 
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == ticket.cabinet_slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
 
-@app.post("/api/tickets/{ticket_id}/return-to-queue")
-def return_to_queue(ticket_id: int, data: CabinetTicketAction, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    cabinet = get_cabinet(db, ticket.cabinet_slug)
-    require_pin(cabinet, data.code_pin)
-    if ticket.statut != "suspended":
-        raise HTTPException(status_code=400, detail="Seul un ticket suspendu peut etre remis dans la file.")
-    old = ticket.statut
-    ticket.statut = "returned"
-    ticket.queue_order = next_order(db, ticket.cabinet_slug)
-    add_event(db, ticket, "returned_to_queue", old, "returned", "secretary", cabinet.nom_medecin, data.reason_code or "returned_after_delay", data.reason_note)
-    db.commit()
-    return {"status": "success", "ticket": ticket_to_dict(ticket)}
+    # Véí»ıifie le PIN
+    if cabinet.code_pin != payload.get("code_pin"):
+        raise HTTPException(status_code=403, detail="PIN incorrect")
 
+    reason_code = payload.get("reason_code", "unknown")
+    reason_note = payload.get("reason_note", "")
 
-@app.post("/api/tickets/{ticket_id}/cabinet-cancel")
-def cabinet_cancel(ticket_id: int, data: CabinetTicketAction, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    cabinet = get_cabinet(db, ticket.cabinet_slug)
-    require_pin(cabinet, data.code_pin)
-    if ticket.statut in ["serving", "completed", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Ce ticket ne peut plus etre annule.")
-    old = ticket.statut
-    ticket.statut = "cancelled"
-    ticket.cancelled_at = datetime.utcnow()
-    ticket.queue_order = None
-    add_event(db, ticket, "cancelled_by_cabinet", old, "cancelled", "secretary", cabinet.nom_medecin, data.reason_code or "cabinet_cancelled", data.reason_note)
-    db.commit()
-    return {"status": "success", "ticket": ticket_to_dict(ticket)}
-
-
-@app.post("/api/tickets/{ticket_id}/approve-urgent")
-def approve_urgent(ticket_id: int, data: UrgentAction, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    cabinet = get_cabinet(db, ticket.cabinet_slug)
-    require_pin(cabinet, data.code_pin)
-    if ticket.statut in ["serving", "completed", "cancelled"]:
-        raise HTTPException(status_code=400, detail="Priorite impossible pour ce ticket.")
-    old = ticket.statut
-    ticket.statut = "urgent"
-    ticket.priority_level = "urgent"
-    ticket.urgent_request_status = "approved"
-    ticket.urgent_reason = data.urgent_reason
-    ticket.queue_order = 0
-    add_event(db, ticket, "urgent_approved", old, "urgent", "doctor", cabinet.nom_medecin, "medical_priority", data.reason_note)
-    db.commit()
-    return {"status": "success", "ticket": ticket_to_dict(ticket)}
-
-
-# IMPORTANT : action qui modifie la file -> POST, jamais GET.
-@app.post("/api/queue/{cabinet_slug}/next")
-def call_next(cabinet_slug: str, pin: str, db: Session = Depends(get_db)):
-    cabinet = get_cabinet(db, cabinet_slug)
-    require_pin(cabinet, pin)
-
-    current = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet_slug,
-        PatientTicket.statut == "serving",
-    ).first()
-    if current:
-        current.statut = "completed"
-        current.completed_at = datetime.utcnow()
-        add_event(db, current, "completed", "serving", "completed", "doctor", cabinet.nom_medecin)
-
-    next_ticket = db.query(PatientTicket).filter(
-        PatientTicket.cabinet_slug == cabinet_slug,
-        queue_status_filter(),
-    ).order_by(PatientTicket.queue_order.asc()).first()
-
-    if not next_ticket:
+    if action == "suspend":
+        ticket.statut = "suspended"
+        event = TicketEvent(
+            ticket_id=ticket.id,
+            event_type="suspended",
+            reason_code=reason_code,
+            reason_note=reason_note
+        )
+        db.add(event)
         db.commit()
-        return {"status": "empty", "message": "Aucun patient en attente.", "serving_num": cabinet.serving_num}
+        return {"message": "Ticket suspendu"}
 
-    old = next_ticket.statut
-    next_ticket.statut = "serving"
-    next_ticket.called_at = datetime.utcnow()
-    next_ticket.started_at = datetime.utcnow()
-    cabinet.serving_num = next_ticket.ticket_num
-    add_event(db, next_ticket, "called_and_serving", old, "serving", "doctor", cabinet.nom_medecin)
-    db.commit()
-    return {"status": "success", "ticket": ticket_to_dict(next_ticket), "display_serving": "N. P-" + format(next_ticket.ticket_num, "02d")}
+    elif action == "return-to-queue":
+        ticket.statut = "returned"
+        event = TicketEvent(
+            ticket_id=ticket.id,
+            event_type="returned",
+            reason_code=reason_code,
+            reason_note=reason_note
+        )
+        db.add(event)
+        db.commit()
+        return {"message": "Ticket remis dans la file"}
+
+    elif action == "cabinet-cancel":
+        ticket.statut = "cancelled"
+        event = TicketEvent(
+            ticket_id=ticket.id,
+            event_type="cancelled",
+            reason_code=reason_code,
+            reason_note=reason_note
+        )
+        db.add(event)
+        db.commit()
+        return {"message": "Ticket annuléıı"}
+
+    elif action == "approve-urgent":
+        ticket.statut = "urgent"
+        urgent_reason = payload.get("urgent_reason", "")
+        event = TicketEvent(
+            ticket_id=ticket.id,
+            event_type="urgent_approved",
+            reason_code="urgent",
+            reason_note=urgent_reason
+        )
+        db.add(event)
+        db.commit()
+        return {"message": "Urgence approuvôıııe"}
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Action {action} non reconnue")
 
 
 @app.get("/api/tickets/{ticket_id}/events")
-def ticket_events(ticket_id: int, db: Session = Depends(get_db)):
-    ticket = db.query(PatientTicket).filter(PatientTicket.id == ticket_id).first()
+async def get_ticket_events(
+    ticket_id: int,
+    db: Session = Depends(get_db)
+):
+    """Rôıııcupèııre l'historique des ôíııvéııịnements d'un ticket"""
+    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
     if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket introuvable.")
-    events = db.query(TicketEvent).filter(TicketEvent.ticket_id == ticket_id).order_by(TicketEvent.created_at.desc()).all()
-    return [{
-        "id": item.id,
-        "event_type": item.event_type,
-        "previous_status": item.previous_status,
-        "new_status": item.new_status,
-        "actor_type": item.actor_type,
-        "actor_name": item.actor_name,
-        "reason_code": item.reason_code,
-        "reason_note": item.reason_note,
-        "created_at": item.created_at.isoformat(),
-    } for item in events]
+        raise HTTPException(status_code=404, detail="Ticket non trouvé")
+
+    events = db.query(TicketEvent).filter(TicketEvent.ticket_id == ticket_id).all()
+
+    return [
+        {
+            "id": e.id,
+            "ticket_id": e.ticket_id,
+            "event_type": e.event_type,
+            "reason_code": e.reason_code,
+            "reason_note": e.reason_note,
+            "created_at": e.created_at.isoformat() if e.created_at else None
+        }
+        for e in events
+    ]
+
+
+# ============================================================================
+# ENDPOINTS - UTILISATEURS (APP PATIENT)
+# ============================================================================
+
+@app.post("/api/tickets")
+async def create_ticket(
+    payload: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Créíııe un ticket pour un patient (app patient)
+    BLOQUÉıîıı si accept_tickets == False
+    """
+    cabinet_slug = payload.get("cabinet_slug")
+    user_id = payload.get("user_id")
+
+    cabinet = db.query(Cabinet).filter(Cabinet.slug == cabinet_slug).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet non trouvé")
+
+    # VÉıîııRIFICATION v7 : Le cabinet accepte-t-il les tickets ?
+    if not cabinet.accept_tickets:
+        raise HTTPException(
+            status_code=400,
+            detail="La prise de tickets est actuellement arrêııîııtôıııe pour ce cabinet. Veuillez rô1essayer plus tard."
+        )
+
+    # Trouver le prochain numôıııro de ticket
+    today = datetime.now().date()
+    last_ticket = db.query(Ticket).filter(
+        Ticket.cabinet_slug == cabinet_slug,
+        func.date(Ticket.created_at) == today
+    ).order_by(Ticket.ticket_num.desc()).first()
+
+    next_num = (last_ticket.ticket_num + 1) if last_ticket else 1
+
+    # Créíııer le ticket
+    ticket = Ticket(
+        cabinet_slug=cabinet_slug,
+        user_id=user_id,
+        nom_patient=payload.get("nom_patient", "Patient"),
+        telephone=payload.get("telephone"),
+        ticket_num=next_num,
+        statut="waiting"
+    )
+    db.add(ticket)
+
+    # Créíııer l'ôıııvéııinement
+    event = TicketEvent(
+        ticket_id=ticket.id,
+        event_type="created",
+        reason_code="patient_app",
+        reason_note="Ticket cré1ôııı depuis l'application patient"
+    )
+    db.add(event)
+    db.commit()
+    db.refresh(ticket)
+
+    return {
+        "message": "Ticket cré1ôııı avec succèııs",
+        "ticket": {
+            "id": ticket.id,
+            "ticket_num": ticket.ticket_num,
+            "nom_patient": ticket.nom_patient
+        }
+    }
+
+
+@app.get("/api/users/{user_id}/notifications")
+async def get_user_notifications(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """Rôıııcupèııre les notifications d'un utilisateur"""
+    notifications = db.query(Notification).filter(
+        Notification.user_id == user_id
+    ).order_by(Notification.created_at.desc()).all()
+
+    return [
+        {
+            "id": n.id,
+            "user_id": n.user_id,
+            "title": n.title,
+            "message": n.message,
+            "is_read": n.is_read,
+            "created_at": n.created_at.isoformat() if n.created_at else None
+        }
+        for n in notifications
+    ]
+
+
+# ============================================================================
+# POINT D'ENTRÉıîııE
+# ============================================================================
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
