@@ -57,7 +57,7 @@ class PatientTicket(Base):
     ticket_num = Column(Integer)
     nom_patient = Column(String)
     telephone = Column(String, nullable=True)
-    statut = Column(String, default="waiting")
+    statut = Column(String, default="waiting", index=True)
     # waiting, returned, suspended, urgent, serving, completed, cancelled
     notification_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -553,14 +553,81 @@ def get_queue_state(slug: str, db: Session = Depends(get_db)):
 
 # R. APPELER LE SUIVANT (touche F1 medecin)
 @app.post("/api/queue/{slug}/next")
-def call_next(slug: str, pin: str, db: Session = Depends(get_db)):
-    cabinet = get_cabinet_or_404(db, slug)
+@app.post("/api/queue/{slug}/next")
+def call_next(
+    slug: str,
+    pin: str,
+    db: Session = Depends(get_db)
+):
+    cabinet = (
+        db.query(Cabinet)
+        .filter(Cabinet.slug == slug)
+        .first()
+    )
+
+    if not cabinet:
+        raise HTTPException(
+            status_code=404,
+            detail="Cabinet introuvable."
+        )
+
     if cabinet.code_pin != pin:
-        raise HTTPException(status_code=403, detail="Code PIN medecin incorrect.")
-    if cabinet.serving_num < cabinet.total_issued:
-        cabinet.serving_num += 1
+        raise HTTPException(
+            status_code=403,
+            detail="Code PIN médecin incorrect."
+        )
+
+    # Le patient actuellement en consultation est terminé.
+    current = (
+        db.query(PatientTicket)
+        .filter(
+            PatientTicket.cabinet_slug == slug,
+            PatientTicket.statut == "serving"
+        )
+        .first()
+    )
+
+    if current:
+        current.statut = "completed"
+
+    # Important :
+    # on accepte waiting ET returned.
+    next_ticket = (
+        db.query(PatientTicket)
+        .filter(
+            PatientTicket.cabinet_slug == slug,
+            PatientTicket.statut.in_(["waiting", "returned"])
+        )
+        .order_by(
+            PatientTicket.ticket_num.asc()
+        )
+        .first()
+    )
+
+    if not next_ticket:
         db.commit()
-    return {"status": "success", "serving_num": cabinet.serving_num, "display_serving": f"N deg P-{cabinet.serving_num:02d}"}
+
+        raise HTTPException(
+            status_code=404,
+            detail="Aucun patient en attente."
+        )
+
+    next_ticket.statut = "serving"
+
+    cabinet.serving_num = next_ticket.ticket_num
+
+    db.commit()
+    db.refresh(next_ticket)
+
+    return {
+        "status": "success",
+        "message": f"Patient P-{next_ticket.ticket_num:02d} appelé.",
+        "ticket_id": next_ticket.id,
+        "ticket_num": next_ticket.ticket_num,
+        "nom_patient": next_ticket.nom_patient,
+        "statut": next_ticket.statut,
+        "display_serving": f"N deg P-{next_ticket.ticket_num:02d}"
+    }
 
 
 # ============================================================
