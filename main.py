@@ -31,28 +31,20 @@ def send_confirmation_email(to_email: str, verify_url: str):
         "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
     )
 
-    html_body = f""
-    <html>
-      <body>
-        <h2>Bienvenue sur TAFWITA</h2>
-        <p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>
-        <p>
-          <a href="{verify_url}" style="
-            display:inline-block;
-            padding:12px 18px;
-            background:#16b6b0;
-            color:#ffffff;
-            text-decoration:none;
-            border-radius:8px;
-            font-weight:bold;
-          ">
-            Confirmer mon inscription
-          </a>
-        </p>
-        <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>
-      </body>
-    </html>
-    ""
+   html_body = f"""
+<html>
+  <body>
+    <h2>Bienvenue sur TAFWITA</h2>
+    <p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>
+    <p>
+      <a href="{verify_url}" style="display:inline-block;padding:12px 18px;background:#16b6b0;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">
+        Confirmer mon inscription
+      </a>
+    </p>
+    <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>
+  </body>
+</html>
+"""
 
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
@@ -69,7 +61,7 @@ def test_email(
     email: str,
     background_tasks: BackgroundTasks
 ):
-    verify_url = f"{os.getenv('https://mdany011-stack.github.io/tafwita/')}/confirm-email.html?token=test123"
+    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
 
     background_tasks.add_task(
         send_confirmation_email,
