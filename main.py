@@ -146,6 +146,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/health")
+def health():
+    return {"status": "healthy", "service": "tafwita-api"}
+
 @app.get("/api/test-email")
 def test_email(email: str, background_tasks: BackgroundTasks):
     verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
@@ -156,16 +160,6 @@ def test_email(email: str, background_tasks: BackgroundTasks):
         verify_url
     )
 
-    return {
-        "status": "ok",
-        "message": "E-mail en cours d'envoi."
-    }
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "service": "tafwita-api"
-    }
 
 
 
