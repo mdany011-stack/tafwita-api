@@ -58,39 +58,6 @@ def send_confirmation_email(to_email: str, verify_url: str):
         server.send_message(msg)
 
 
-@app.get("/api/test-email")
-def test_email(email: str, background_tasks: BackgroundTasks):
-    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
-
-    background_tasks.add_task(
-        send_confirmation_email,
-        email,
-        verify_url
-    )
-
-    return {
-        "status": "ok",
-        "message": "E-mail en cours d'envoi."
-    }
-
-@app.get("/api/test-email")
-def test_email(
-    email: str,
-    background_tasks: BackgroundTasks
-):
-    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
-
-    background_tasks.add_task(
-        send_confirmation_email,
-        email,
-        verify_url
-    )
-
-    return {
-        "status": "ok",
-        "message": "E-mail en cours d'envoi."
-    }
-
 
 
 
@@ -168,6 +135,22 @@ Base.metadata.create_all(bind=engine)
 # 3. APP
 # ============================================================
 app = FastAPI(title="TAFWITA API Cloud", description="Gestion des files et des abonnements")
+
+@app.get("/api/test-email")
+def test_email(email: str, background_tasks: BackgroundTasks):
+    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
+
+    background_tasks.add_task(
+        send_confirmation_email,
+        email,
+        verify_url
+    )
+
+    return {
+        "status": "ok",
+        "message": "E-mail en cours d'envoi."
+    }
+
 
 app.add_middleware(
     CORSMiddleware,
