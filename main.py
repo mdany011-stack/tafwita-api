@@ -6,7 +6,89 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+#=============================================================
+import ssl
+import smtplib
+from email.message import EmailMessage
+from fastapi import BackgroundTasks
 
+def send_confirmation_email(to_email: str, verify_url: str):
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "465"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    mail_from = os.getenv("MAIL_FROM", smtp_user)
+
+    msg = EmailMessage()
+    msg["Subject"] = "Confirmez votre inscription TAFWITA"
+    msg["From"] = mail_from
+    msg["To"] = to_email
+
+    text_body = (
+        "Bonjour,\n\n"
+        "Cliquez sur ce lien pour confirmer votre inscription TAFWITA :\n"
+        f"{verify_url}\n\n"
+        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
+    )
+
+    html_body = f""
+    <html>
+      <body>
+        <h2>Bienvenue sur TAFWITA</h2>
+        <p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>
+        <p>
+          <a href="{verify_url}" style="
+            display:inline-block;
+            padding:12px 18px;
+            background:#16b6b0;
+            color:#ffffff;
+            text-decoration:none;
+            border-radius:8px;
+            font-weight:bold;
+          ">
+            Confirmer mon inscription
+          </a>
+        </p>
+        <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>
+      </body>
+    </html>
+    ""
+
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+
+    context = ssl.create_default_context()
+
+    with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+
+
+@app.get("/api/test-email")
+def test_email(
+    email: str,
+    background_tasks: BackgroundTasks
+):
+    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
+
+    background_tasks.add_task(
+        send_confirmation_email,
+        email,
+        verify_url
+    )
+
+    return {
+        "status": "ok",
+        "message": "E-mail en cours d'envoi."
+    }
+
+
+
+
+
+
+
+#=============================================================
 # ============================================================
 # 1. CONNEXION BASE DE DONNEES
 # ============================================================
