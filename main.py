@@ -33,8 +33,7 @@ def send_confirmation_email(to_email: str, verify_url: str):
         f"{verify_url}\n\n"
         "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
     )
-
-     html_body = (
+    html_body = (
         "<html>"
         "<body>"
         "<h2>Bienvenue sur TAFWITA</h2>"
@@ -47,6 +46,8 @@ def send_confirmation_email(to_email: str, verify_url: str):
         "</html>"
     )
 
+
+     
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
 
