@@ -138,6 +138,13 @@ Base.metadata.create_all(bind=engine)
 # 3. APP
 # ============================================================
 app = FastAPI(title="TAFWITA API Cloud", description="Gestion des files et des abonnements")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/api/test-email")
 def test_email(email: str, background_tasks: BackgroundTasks):
@@ -163,13 +170,6 @@ def health():
 
 
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 def get_db():
