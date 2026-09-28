@@ -139,14 +139,6 @@ Base.metadata.create_all(bind=engine)
 # ============================================================
 app = FastAPI(title="TAFWITA API Cloud", description="Gestion des files et des abonnements")
 
-@app.get("/health")
-def health():
-    return {
-        "status": "healthy",
-        "service": "tafwita-api"
-    }
-
-
 @app.get("/api/test-email")
 def test_email(email: str, background_tasks: BackgroundTasks):
     verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
@@ -161,6 +153,14 @@ def test_email(email: str, background_tasks: BackgroundTasks):
         "status": "ok",
         "message": "E-mail en cours d'envoi."
     }
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy",
+        "service": "tafwita-api"
+    }
+
+
 
 
 app.add_middleware(
