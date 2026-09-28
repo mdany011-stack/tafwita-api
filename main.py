@@ -69,7 +69,7 @@ def test_email(
     email: str,
     background_tasks: BackgroundTasks
 ):
-    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
+    verify_url = f"{os.getenv('https://mdany011-stack.github.io/tafwita/')}/confirm-email.html?token=test123"
 
     background_tasks.add_task(
         send_confirmation_email,
