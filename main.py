@@ -160,6 +160,11 @@ def test_email(email: str, background_tasks: BackgroundTasks):
         verify_url
     )
 
+    return {
+        "status": "ok",
+        "message": "E-mail en cours d'envoi."
+    }
+
 
 
 
