@@ -16,48 +16,55 @@ from fastapi import BackgroundTasks
 
 
 def send_confirmation_email(to_email: str, verify_url: str):
+    print("=== EMAIL TASK START ===")
+    print("to_email =", to_email)
+    print("verify_url =", verify_url)
+
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", "465"))
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
     mail_from = os.getenv("MAIL_FROM", smtp_user)
 
-    msg = EmailMessage()
-    msg["Subject"] = "Confirmez votre inscription TAFWITA"
-    msg["From"] = mail_from
-    msg["To"] = to_email
+    print("smtp_host =", smtp_host)
+    print("smtp_port =", smtp_port)
+    print("smtp_user =", smtp_user)
+    print("mail_from =", mail_from)
+    print("smtp_pass exists =", bool(smtp_pass))
 
-    text_body = (
-        "Bonjour,\n\n"
-        "Cliquez sur ce lien pour confirmer votre inscription TAFWITA :\n"
-        f"{verify_url}\n\n"
-        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
-    )
-    html_body = (
-        "<html>"
-        "<body>"
-        "<h2>Bienvenue sur TAFWITA</h2>"
-        "<p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>"
-        f'<p><a href="{verify_url}" style="display:inline-block;padding:12px 18px;background:#16b6b0;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">'
-        "Confirmer mon inscription"
-        "</a></p>"
-        "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>"
-        "</body>"
-        "</html>"
-    )
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = "Confirmez votre inscription TAFWITA"
+        msg["From"] = mail_from
+        msg["To"] = to_email
 
+        body = (
+            "Bonjour,\n\n"
+            "Cliquez sur ce lien pour confirmer votre inscription TAFWITA :\n"
+            f"{verify_url}\n\n"
+            "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
+        )
 
-     
-    msg.set_content(text_body)
-    msg.add_alternative(html_body, subtype="html")
+        msg.set_content(body)
 
-    context = ssl.create_default_context()
+        context = ssl.create_default_context()
 
-    with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
+        print("Opening SMTP connection...")
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+            server.set_debuglevel(1)
+            print("SMTP connection opened")
+            print("Logging in...")
+            server.login(smtp_user, smtp_pass)
+            print("Login success")
+            server.send_message(msg)
+            print("Message sent successfully")
 
+        print("=== EMAIL TASK END SUCCESS ===")
 
+    except Exception as e:
+        print("=== EMAIL TASK ERROR ===")
+        print(repr(e))
+        raise
 
 
 
