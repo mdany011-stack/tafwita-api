@@ -7,10 +7,13 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 #=============================================================
+
+
 import ssl
 import smtplib
 from email.message import EmailMessage
 from fastapi import BackgroundTasks
+
 
 def send_confirmation_email(to_email: str, verify_url: str):
     smtp_host = os.getenv("SMTP_HOST")
@@ -31,20 +34,18 @@ def send_confirmation_email(to_email: str, verify_url: str):
         "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
     )
 
-   html_body = f"""
-<html>
-  <body>
-    <h2>Bienvenue sur TAFWITA</h2>
-    <p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>
-    <p>
-      <a href="{verify_url}" style="display:inline-block;padding:12px 18px;background:#16b6b0;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">
-        Confirmer mon inscription
-      </a>
-    </p>
-    <p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>
-  </body>
-</html>
-"""
+ html_body = (
+    "<html>"
+    "<body>"
+    "<h2>Bienvenue sur TAFWITA</h2>"
+    "<p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>"
+    f'<p><a href="{verify_url}" style="display:inline-block;padding:12px 18px;background:#16b6b0;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">'
+    "Confirmer mon inscription"
+    "</a></p>"
+    "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>"
+    "</body>"
+    "</html>"
+)
 
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
@@ -55,6 +56,21 @@ def send_confirmation_email(to_email: str, verify_url: str):
         server.login(smtp_user, smtp_pass)
         server.send_message(msg)
 
+
+@app.get("/api/test-email")
+def test_email(email: str, background_tasks: BackgroundTasks):
+    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
+
+    background_tasks.add_task(
+        send_confirmation_email,
+        email,
+        verify_url
+    )
+
+    return {
+        "status": "ok",
+        "message": "E-mail en cours d'envoi."
+    }
 
 @app.get("/api/test-email")
 def test_email(
@@ -73,7 +89,6 @@ def test_email(
         "status": "ok",
         "message": "E-mail en cours d'envoi."
     }
-
 
 
 
@@ -626,7 +641,6 @@ def get_queue_state(slug: str, db: Session = Depends(get_db)):
 
 
 # R. APPELER LE SUIVANT (touche F1 medecin)
-@app.post("/api/queue/{slug}/next")
 @app.post("/api/queue/{slug}/next")
 def call_next(
     slug: str,
