@@ -34,18 +34,18 @@ def send_confirmation_email(to_email: str, verify_url: str):
         "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
     )
 
- html_body = (
-    "<html>"
-    "<body>"
-    "<h2>Bienvenue sur TAFWITA</h2>"
-    "<p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>"
-    f'<p><a href="{verify_url}" style="display:inline-block;padding:12px 18px;background:#16b6b0;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">'
-    "Confirmer mon inscription"
-    "</a></p>"
-    "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>"
-    "</body>"
-    "</html>"
-)
+     html_body = (
+        "<html>"
+        "<body>"
+        "<h2>Bienvenue sur TAFWITA</h2>"
+        "<p>Cliquez sur le bouton ci-dessous pour confirmer votre inscription.</p>"
+        f'<p><a href="{verify_url}" style="display:inline-block;padding:12px 18px;background:#16b6b0;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:bold;">'
+        "Confirmer mon inscription"
+        "</a></p>"
+        "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>"
+        "</body>"
+        "</html>"
+    )
 
     msg.set_content(text_body)
     msg.add_alternative(html_body, subtype="html")
