@@ -1,13 +1,13 @@
 import hashlib
 import os
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 import bcrypt
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 #=============================================================
 
@@ -128,8 +128,9 @@ class PatientTicket(Base):
     nom_patient = Column(String)
     telephone = Column(String, nullable=True)
     statut = Column(String, default="waiting", index=True)
-    # waiting, returned, suspended, urgent, serving, completed, cancelled
+    # waiting, returned, suspended, urgent_requested, urgent, serving, completed, cancelled
     notification_count = Column(Integer, default=0)
+    suivi_token_hash = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -153,9 +154,27 @@ class CabinetSession(Base):
 
 Base.metadata.create_all(bind=engine)
 
+
+def assurer_colonnes():
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("ALTER TABLE patient_tickets ADD COLUMN suivi_token_hash VARCHAR"))
+        except Exception:
+            pass
+
+
+assurer_colonnes()
+
 SESSION_HOURS = 12
 MAX_PIN_FAILURES = 5
 LOCK_MINUTES = 15
+TZ_ALGERIE = timezone(timedelta(hours=1))
+STATUTS_OUVERTS = (
+    "waiting", "returned", "suspended", "urgent_requested", "urgent", "serving",
+)
+STATUTS_FILE = STATUTS_OUVERTS
+STATUTS_AVANT_VOUS = ("waiting", "returned", "urgent_requested", "urgent")
+STATUTS_APPELABLES = ("waiting", "returned", "urgent_requested")
 # Compteur memoire : (slug, ip) -> {fails, locked_until}
 _pin_attempts = {}
 
@@ -370,6 +389,74 @@ def authentifier_pour_ticket(
     )
 
 
+def abonnement_ok(cabinet: Cabinet) -> bool:
+    if not cabinet.is_active:
+        return False
+    if cabinet.subscription_end and cabinet.subscription_end < datetime.utcnow():
+        return False
+    return True
+
+
+def exiger_abonnement(cabinet: Cabinet) -> None:
+    if not abonnement_ok(cabinet):
+        raise HTTPException(
+            status_code=403,
+            detail="Abonnement expire ou cabinet inactif.",
+        )
+
+
+def heure_algerie() -> str:
+    return datetime.now(TZ_ALGERIE).strftime("%H:%M")
+
+
+def prise_autorisee_horaire(cabinet: Cabinet) -> bool:
+    if cabinet.ticket_mode != "fixed":
+        return True
+    maintenant = heure_algerie()
+    debut = cabinet.ticket_start_time or "00:00"
+    if maintenant < debut:
+        return False
+    if cabinet.ticket_end_time and maintenant >= cabinet.ticket_end_time:
+        return False
+    return True
+
+
+def extraire_suivi(request: Request, body=None) -> Optional[str]:
+    header = request.headers.get("x-suivi-token")
+    if header and header.strip():
+        return header.strip()
+    if body is not None:
+        tok = getattr(body, "suivi_token", None)
+        if tok and str(tok).strip():
+            return str(tok).strip()
+    return None
+
+
+def exiger_suivi_si_present(ticket: PatientTicket, request: Request, body=None) -> None:
+    if not ticket.suivi_token_hash:
+        return
+    tok = extraire_suivi(request, body)
+    if not tok or hash_jeton(tok) != ticket.suivi_token_hash:
+        raise HTTPException(status_code=404, detail="Ticket introuvable.")
+
+
+def ticket_public_dict(t: PatientTicket) -> dict:
+    d = ticket_to_dict(t)
+    d["nom_patient"] = None
+    d["telephone"] = None
+    return d
+
+
+def annuler_tickets_ouverts(db: Session, slug: str, event_type: str, reason_note: Optional[str] = None) -> None:
+    remaining = db.query(PatientTicket).filter(
+        PatientTicket.cabinet_slug == slug,
+        PatientTicket.statut.in_(list(STATUTS_OUVERTS)),
+    ).all()
+    for t in remaining:
+        t.statut = "cancelled"
+        log_event(db, t.id, event_type, reason_note)
+
+
 def log_event(db: Session, ticket_id: int, event_type: str, reason_note: Optional[str] = None):
     db.add(TicketEvent(ticket_id=ticket_id, event_type=event_type, reason_note=reason_note))
     db.commit()
@@ -446,6 +533,7 @@ class TicketActionBody(BaseModel):
     code_pin: Optional[str] = None
     reason_code: Optional[str] = None
     reason_note: Optional[str] = None
+    suivi_token: Optional[str] = None
 
 
 class UrgentBody(BaseModel):
@@ -567,41 +655,51 @@ def cabinet_public(slug: str, db: Session = Depends(get_db)):
 @app.post("/api/tickets/take")
 def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
     cabinet = get_cabinet_or_404(db, data.cabinet_slug)
+    exiger_abonnement(cabinet)
     if cabinet.day_closed or not cabinet.accept_tickets:
         raise HTTPException(status_code=400, detail="La prise de tickets n'est pas disponible actuellement.")
+    if not prise_autorisee_horaire(cabinet):
+        raise HTTPException(status_code=400, detail="La prise de tickets n'est pas ouverte a cette heure.")
     if cabinet.max_tickets_per_day and cabinet.total_issued >= cabinet.max_tickets_per_day:
         raise HTTPException(status_code=400, detail="Nombre maximum de tickets atteint pour aujourd'hui.")
 
+    brut = secrets.token_urlsafe(24)
     cabinet.total_issued += 1
     new_ticket = PatientTicket(
         cabinet_slug=cabinet.slug,
         ticket_num=cabinet.total_issued,
         nom_patient=data.nom_patient,
         telephone=data.telephone,
+        suivi_token_hash=hash_jeton(brut),
     )
     db.add(new_ticket)
     db.commit()
     db.refresh(new_ticket)
     log_event(db, new_ticket.id, "created")
 
-    return {"status": "success", "ticket": ticket_to_dict(new_ticket)}
+    return {
+        "status": "success",
+        "ticket": ticket_to_dict(new_ticket),
+        "suivi_token": brut,
+    }
 
 
 # E. SUIVI D'UN TICKET (patient)
 @app.get("/api/tickets/{ticket_id}/patient")
-def track_ticket(ticket_id: int, db: Session = Depends(get_db)):
+def track_ticket(ticket_id: int, request: Request, db: Session = Depends(get_db)):
     ticket = get_ticket_or_404(db, ticket_id)
+    exiger_suivi_si_present(ticket, request)
     cabinet = db.query(Cabinet).filter(Cabinet.slug == ticket.cabinet_slug).first()
     waiting_before_you = 0
-    if cabinet and ticket.statut in ("waiting", "returned"):
+    if cabinet and ticket.statut in STATUTS_AVANT_VOUS:
         waiting_before_you = db.query(PatientTicket).filter(
             PatientTicket.cabinet_slug == cabinet.slug,
-            PatientTicket.statut.in_(["waiting", "returned"]),
+            PatientTicket.statut.in_(list(STATUTS_AVANT_VOUS)),
             PatientTicket.ticket_num < ticket.ticket_num,
         ).count()
     payload = ticket_to_dict(ticket)
     payload["waiting_before_you"] = waiting_before_you
-    return {"ticket": payload}
+    return {"ticket": payload, "waiting_before_you": waiting_before_you}
 
 
 # G. HISTORIQUE / EVENEMENTS D'UN TICKET
@@ -703,6 +801,7 @@ def add_manual_ticket(
     cabinet = authentifier_cabinet(
         db, data.cabinet_slug, request, authorization, data.code_pin
     )
+    exiger_abonnement(cabinet)
     cabinet.total_issued += 1
     new_ticket = PatientTicket(
         cabinet_slug=cabinet.slug,
@@ -767,7 +866,9 @@ def patient_ticket_action(
 
     if action in ACTIONS_CABINET:
         authentifier_pour_ticket(db, ticket, request, authorization, body.code_pin)
-    elif action not in ACTIONS_PATIENT:
+    elif action in ACTIONS_PATIENT:
+        exiger_suivi_si_present(ticket, request, body)
+    else:
         raise HTTPException(status_code=400, detail="Action inconnue.")
 
     if action == "patient-suspend":
@@ -780,7 +881,7 @@ def patient_ticket_action(
         ticket.statut = "returned"
         log_event(db, ticket.id, "patient_present", body.reason_note)
     elif action == "request-urgent":
-        ticket.statut = "urgent"
+        ticket.statut = "urgent_requested"
         log_event(db, ticket.id, "urgent_requested", body.reason_note)
     elif action == "suspend":
         ticket.statut = "suspended"
@@ -806,6 +907,8 @@ def start_day(
     db: Session = Depends(get_db),
 ):
     cabinet = authentifier_cabinet(db, slug, request, authorization, body.code_pin)
+    exiger_abonnement(cabinet)
+    annuler_tickets_ouverts(db, cabinet.slug, "start_day_cancel")
     cabinet.day_closed = False
     cabinet.accept_tickets = True
     cabinet.serving_num = 0
@@ -828,7 +931,7 @@ def close_day(
 
     remaining = db.query(PatientTicket).filter(
         PatientTicket.cabinet_slug == cabinet.slug,
-        PatientTicket.statut.in_(["waiting", "returned", "suspended", "urgent"]),
+        PatientTicket.statut.in_(list(STATUTS_OUVERTS)),
     ).all()
     for t in remaining:
         t.statut = "cancelled"
@@ -861,17 +964,32 @@ def update_settings(
 
 # Q. ETAT EN DIRECT DE LA FILE (utilise par TV, patient et desktop)
 @app.get("/api/queue/{slug}")
-def get_queue_state(slug: str, db: Session = Depends(get_db)):
+def get_queue_state(
+    slug: str,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
     cabinet = get_cabinet_or_404(db, slug)
     tickets = db.query(PatientTicket).filter(
         PatientTicket.cabinet_slug == cabinet.slug,
-        PatientTicket.statut.in_(["waiting", "returned", "suspended", "urgent", "serving"]),
+        PatientTicket.statut.in_(list(STATUTS_FILE)),
     ).order_by(PatientTicket.ticket_num.asc()).all()
 
     waiting = db.query(PatientTicket).filter(
         PatientTicket.cabinet_slug == cabinet.slug,
-        PatientTicket.statut.in_(["waiting", "returned"]),
+        PatientTicket.statut.in_(list(STATUTS_APPELABLES)),
     ).count()
+
+    prive = False
+    token = extraire_bearer(authorization)
+    if token:
+        cab = cabinet_depuis_jeton(db, token)
+        prive = cab is not None and cab.slug == cabinet.slug
+
+    tickets_out = [
+        ticket_to_dict(t) if prive else ticket_public_dict(t) for t in tickets
+    ]
 
     return {
         "cabinet_name": cabinet.nom_medecin,
@@ -889,7 +1007,7 @@ def get_queue_state(slug: str, db: Session = Depends(get_db)):
         "opening_time": cabinet.opening_time,
         "closing_time": cabinet.closing_time,
         "max_tickets_per_day": cabinet.max_tickets_per_day,
-        "tickets": [ticket_to_dict(t) for t in tickets],
+        "tickets": tickets_out,
     }
 
 
@@ -903,8 +1021,9 @@ def call_next(
     db: Session = Depends(get_db)
 ):
     cabinet = authentifier_cabinet(db, slug, request, authorization, None, pin)
+    exiger_abonnement(cabinet)
 
-    # Le patient actuellement en consultation est terminé.
+    # Le patient actuellement en consultation est termine.
     current = (
         db.query(PatientTicket)
         .filter(
@@ -917,19 +1036,26 @@ def call_next(
     if current:
         current.statut = "completed"
 
-    # Important :
-    # on accepte waiting ET returned.
     next_ticket = (
         db.query(PatientTicket)
         .filter(
             PatientTicket.cabinet_slug == slug,
-            PatientTicket.statut.in_(["waiting", "returned"])
+            PatientTicket.statut == "urgent",
         )
-        .order_by(
-            PatientTicket.ticket_num.asc()
-        )
+        .order_by(PatientTicket.ticket_num.asc())
         .first()
     )
+
+    if not next_ticket:
+        next_ticket = (
+            db.query(PatientTicket)
+            .filter(
+                PatientTicket.cabinet_slug == slug,
+                PatientTicket.statut.in_(list(STATUTS_APPELABLES)),
+            )
+            .order_by(PatientTicket.ticket_num.asc())
+            .first()
+        )
 
     if not next_ticket:
         db.commit()
