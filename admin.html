@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f2a2c">
+  <title>TAFWITA ADMIN</title>
+  <style>
+    :root {
+      --bg: #f4f9f8;
+      --bg-soft: #edf7f5;
+      --surface: #ffffff;
+      --mint: #f1fbf8;
+      --border: #dcefeb;
+      --border-strong: #bfeee3;
+      --teal: #16b6b0;
+      --teal-dark: #128f8a;
+      --text: #24343d;
+      --soft: #50646b;
+      --muted: #91a4a8;
+      --success: #2c8b69;
+      --warn: #a97524;
+      --danger: #bc5d62;
+      --sidebar: #0f2a2c;
+      --sidebar-2: #164244;
+      --shadow: 0 14px 38px rgba(45, 121, 115, .10);
+      --ff: "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; font-family: var(--ff); color: var(--text); background: var(--bg); }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .hidden { display: none !important; }
+
+    #login {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle at 80% 10%, rgba(22,182,176,.22), transparent 28rem),
+        linear-gradient(145deg, var(--bg-soft), var(--bg));
+    }
+    .login-card {
+      width: min(420px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 36px 32px;
+      box-shadow: var(--shadow);
+    }
+    .brand { font-size: 26px; font-weight: 850; letter-spacing: .6px; margin: 0 0 6px; }
+    .brand span { color: var(--teal); }
+    .login-card p { margin: 0 0 22px; color: var(--soft); font-size: 14px; line-height: 1.5; }
+    label { display: block; font-size: 12px; font-weight: 700; color: var(--soft); margin: 0 0 7px; }
+    .field { width: 100%; height: 48px; border: 1px solid var(--border); border-radius: 14px; padding: 0 14px; background: #fff; color: var(--text); outline: 0; }
+    .field:focus, textarea.field:focus { border-color: var(--teal); box-shadow: 0 0 0 4px rgba(22,182,176,.12); }
+    textarea.field { height: auto; min-height: 90px; padding: 12px 14px; resize: vertical; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      min-height: 44px; padding: 0 16px; border-radius: 99px; border: 1px solid transparent;
+      font-size: 13px; font-weight: 750;
+    }
+    .btn-primary { width: 100%; margin-top: 16px; color: #fff; background: linear-gradient(90deg, var(--teal), #43cdb7); box-shadow: 0 9px 20px rgba(22,182,176,.24); }
+    .btn-ghost { background: #fff; color: var(--teal-dark); border-color: var(--border-strong); }
+    .btn-danger { background: #fceced; color: var(--danger); border-color: #f0cfd2; }
+    .btn-warn { background: #fff4de; color: var(--warn); border-color: #f2d9a5; }
+    .btn-sm { min-height: 34px; padding: 0 12px; font-size: 12px; }
+    .err { min-height: 18px; margin: 10px 0 0; color: var(--danger); font-size: 13px; }
+
+    #app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+    .sidebar {
+      background: linear-gradient(180deg, var(--sidebar), var(--sidebar-2));
+      color: #d7ecea;
+      padding: 22px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .side-logo { padding: 8px 12px 18px; font-size: 20px; font-weight: 850; letter-spacing: .5px; color: #fff; }
+    .side-logo span { color: var(--teal); }
+    .nav-btn {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; text-align: left; border: 0; background: transparent;
+      color: #c5ddd9; border-radius: 12px; padding: 11px 12px; font-weight: 650; font-size: 14px;
+    }
+    .nav-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+    .nav-btn.active { background: rgba(22,182,176,.22); color: #fff; }
+    .nav-btn[data-view="users"]::before { content: "\1F465  "; }
+    .nav-btn[data-view="praticiens"]::before { content: "\1F3E5  "; }
+    .nav-btn[data-view="abos"]::before { content: "\1F4B3  "; }
+    .nav-btn[data-view="paiements"]::before { content: "\1F4B0  "; }
+    .nav-btn[data-view="ca"]::before { content: "\1F4C8  "; }
+    .nav-btn[data-view="support"]::before { content: "\1F3AB  "; }
+    .nav-btn[data-view="secu"]::before { content: "\1F512  "; }
+    .nav-btn[data-view="stats"]::before { content: "\1F4CA  "; }
+    .nav-btn[data-view="params"]::before { content: "\2699\FE0F  "; }
+    .side-foot { margin-top: auto; padding: 12px; }
+    .side-foot button { width: 100%; }
+
+    .main { min-width: 0; display: flex; flex-direction: column; }
+    .topbar {
+      display: flex; align-items: center; gap: 12px; justify-content: space-between;
+      padding: 16px 22px; border-bottom: 1px solid var(--border); background: rgba(244,249,248,.9);
+      position: sticky; top: 0; z-index: 5;
+    }
+    .top-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .burger { display: none; width: 42px; height: 42px; border: 1px solid var(--border); border-radius: 12px; background: #fff; }
+    .page-title { margin: 0; font-size: 20px; }
+    .search { width: min(340px, 42vw); height: 42px; border: 1px solid var(--border); border-radius: 12px; padding: 0 12px; background: #fff; }
+    .content { padding: 22px; }
+    .view { display: none; animation: in .18s ease; }
+    .view.active { display: block; }
+    @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
+    .kpi {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 18px;
+      padding: 16px 18px; box-shadow: 0 8px 20px rgba(45,121,115,.06);
+    }
+    .kpi small { color: var(--muted); font-size: 12px; font-weight: 700; }
+    .kpi strong { display: block; margin-top: 8px; font-size: 26px; letter-spacing: -.5px; }
+    .kpi span { color: var(--soft); font-size: 12px; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+      padding: 18px; box-shadow: 0 8px 20px rgba(45,121,115,.06); margin-bottom: 16px;
+    }
+    .card h2 { margin: 0 0 14px; font-size: 16px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; align-items: center; }
+    .table-wrap { overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    th { color: var(--muted); font-size: 11px; letter-spacing: .4px; text-transform: uppercase; }
+    .badge { display: inline-block; padding: 4px 8px; border-radius: 99px; font-size: 11px; font-weight: 800; }
+    .b-ok { background: #e4f5ee; color: var(--success); }
+    .b-off { background: #edf0f0; color: var(--soft); }
+    .b-warn { background: #fff4de; color: var(--warn); }
+    .b-bad { background: #fceced; color: var(--danger); }
+    .empty { padding: 28px; text-align: center; color: var(--muted); border: 1px dashed #bcded7; border-radius: 14px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-grid .full { grid-column: 1 / -1; }
+    .toast {
+      position: fixed; z-index: 40; top: 16px; left: 50%; transform: translate(-50%, -12px);
+      opacity: 0; pointer-events: none; transition: .2s;
+      padding: 12px 16px; border-radius: 12px; background: #fff; border: 1px solid var(--border); box-shadow: var(--shadow);
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    .overlay {
+      display: none; position: fixed; inset: 0; background: rgba(15,42,44,.45); z-index: 20;
+    }
+    .overlay.show { display: block; }
+    @media (max-width: 980px) {
+      #app { grid-template-columns: 1fr; }
+      .sidebar { position: fixed; inset: 0 auto 0 0; width: 260px; z-index: 30; transform: translateX(-105%); transition: .2s; }
+      .sidebar.open { transform: none; }
+      .burger { display: grid; place-items: center; }
+      .kpis { grid-template-columns: 1fr 1fr; }
+      .search { width: 100%; }
+      .topbar { flex-wrap: wrap; }
+      .form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="login">
+    <form class="login-card" id="login-form">
+      <h1 class="brand">TAFWITA <span>ADMIN</span></h1>
+      <p>Espace interne. Connexion reservee a l'equipe TAFWITA.</p>
+      <label for="pwd">Mot de passe</label>
+      <input class="field" id="pwd" type="password" autocomplete="current-password" required>
+      <button class="btn btn-primary" type="submit">Se connecter</button>
+      <div class="err" id="login-err"></div>
+    </form>
+  </div>
+
+  <div id="app" class="hidden">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-logo">TAFWITA <span>ADMIN</span></div>
+      <button class="nav-btn active" data-view="users" type="button">Utilisateurs</button>
+      <button class="nav-btn" data-view="praticiens" type="button">Praticiens</button>
+      <button class="nav-btn" data-view="abos" type="button">Abonnements</button>
+      <button class="nav-btn" data-view="paiements" type="button">Paiements</button>
+      <button class="nav-btn" data-view="ca" type="button">Chiffre d'affaires</button>
+      <button class="nav-btn" data-view="support" type="button">Support</button>
+      <button class="nav-btn" data-view="secu" type="button">Securite</button>
+      <button class="nav-btn" data-view="stats" type="button">Statistiques</button>
+      <button class="nav-btn" data-view="params" type="button">Parametres</button>
+      <div class="side-foot">
+        <button class="btn btn-ghost" type="button" id="btn-logout">Deconnexion</button>
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="top-left">
+          <button class="burger" type="button" id="burger" aria-label="Menu">☰</button>
+          <h1 class="page-title" id="page-title">Utilisateurs</h1>
+        </div>
+        <input class="search" id="search" type="search" placeholder="Rechercher…">
+      </header>
+      <div class="content">
+        <section class="view active" id="view-users">
+          <div class="kpis" id="users-kpis"></div>
+          <div class="card">
+            <h2>Tickets recents (anonymes)</h2>
+            <div class="table-wrap" id="users-table"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-praticiens">
+          <div class="card">
+            <h2>Cabinets inscrits</h2>
+            <div class="table-wrap" id="praticiens-table"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-abos">
+          <div class="card">
+            <h2>Abonnements cabinets</h2>
+            <div class="table-wrap" id="abos-table"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-paiements">
+          <div class="card">
+            <h2>Paiements estimes (mensuel 2500 DA, annuel 36000 DA)</h2>
+            <div class="table-wrap" id="paiements-table"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-ca">
+          <div class="kpis" id="ca-kpis"></div>
+          <div class="card">
+            <h2>Repartition par offre</h2>
+            <div id="ca-detail"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-support">
+          <div class="card">
+            <h2>Nouveau ticket</h2>
+            <form class="form-grid" id="support-form">
+              <div>
+                <label for="s-nom">Nom</label>
+                <input class="field" id="s-nom" required>
+              </div>
+              <div>
+                <label for="s-email">E-mail</label>
+                <input class="field" id="s-email" type="email">
+              </div>
+              <div class="full">
+                <label for="s-sujet">Sujet</label>
+                <input class="field" id="s-sujet" required>
+              </div>
+              <div class="full">
+                <label for="s-msg">Message</label>
+                <textarea class="field" id="s-msg" required></textarea>
+              </div>
+              <div class="full">
+                <button class="btn btn-primary" type="submit" style="width:auto;margin:0">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+          <div class="card">
+            <h2>Tickets</h2>
+            <div class="table-wrap" id="support-table"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-secu">
+          <div class="kpis" id="secu-kpis"></div>
+          <div class="card">
+            <h2>Sessions cabinets actives</h2>
+            <div class="table-wrap" id="sessions-table"></div>
+          </div>
+          <div class="card">
+            <h2>Tentatives PIN</h2>
+            <div class="table-wrap" id="pin-table"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-stats">
+          <div class="kpis" id="stats-kpis"></div>
+          <div class="card">
+            <h2>Cabinets par wilaya</h2>
+            <div class="table-wrap" id="wilaya-table"></div>
+          </div>
+        </section>
+
+        <section class="view" id="view-params">
+          <div class="card">
+            <h2>URL de l'API</h2>
+            <p style="color:var(--soft);font-size:14px;margin:0 0 12px">Laissez vide pour detecter automatiquement (local ou production).</p>
+            <input class="field" id="api-url" placeholder="https://tafwita-api.onrender.com">
+            <div class="toolbar" style="margin-top:12px">
+              <button class="btn btn-primary" type="button" id="save-api" style="width:auto;margin:0">Enregistrer</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Regles</h2>
+            <p style="color:var(--soft);line-height:1.6;margin:0">Le jeton admin n'est jamais affiche ici. Il est lu depuis la variable d'environnement ADMIN_TOKEN cote serveur. Nom et telephone des patients ne sont ni en base ni dans cet admin : ils restent uniquement sur le telephone du patient et le PC du cabinet.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var TITLES = {
+    users: "Utilisateurs",
+    praticiens: "Praticiens",
+    abos: "Abonnements",
+    paiements: "Paiements",
+    ca: "Chiffre d'affaires",
+    support: "Support",
+    secu: "Securite",
+    stats: "Statistiques",
+    params: "Parametres"
+  };
+  var cache = { cabinets: [], patients: [], payments: [], support: [], security: null, stats: null };
+  var currentView = "users";
+
+  function defaultApi() {
+    var ls = localStorage.getItem("tafwita_api");
+    if (ls) return ls.replace(/\/$/, "");
+    var h = location.hostname;
+    if (h === "tafwita-api.onrender.com" || h === "127.0.0.1" || h === "localhost") {
+      return location.origin;
+    }
+    return "https://tafwita-api.onrender.com";
+  }
+
+  function apiBase() { return defaultApi(); }
+  function token() { return sessionStorage.getItem("tafwita_admin_token") || ""; }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function toast(msg) {
+    var el = document.getElementById("toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    setTimeout(function () { el.classList.remove("show"); }, 2400);
+  }
+
+  function badge(statut) {
+    var s = String(statut || "").toLowerCase();
+    var cls = "b-off";
+    if (s === "actif" || s === "active" || s === "ouvert" || s === "waiting" || s === "serving") cls = "b-ok";
+    if (s === "expire" || s === "urgent" || s === "urgent_requested" || s === "locked") cls = "b-warn";
+    if (s === "ferme" || s === "inactif" || s === "cancelled") cls = "b-bad";
+    return '<span class="badge ' + cls + '">' + esc(statut) + "</span>";
+  }
+
+  async function api(path, opts) {
+    opts = opts || {};
+    var headers = Object.assign({ "Content-Type": "application/json", "X-Admin-Token": token() }, opts.headers || {});
+    var res = await fetch(apiBase() + path, Object.assign({}, opts, { headers: headers }));
+    var data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (res.status === 401) {
+      sessionStorage.removeItem("tafwita_admin_token");
+      showLogin("Session expiree. Reconnectez-vous.");
+      throw new Error("Non autorise");
+    }
+    if (!res.ok) {
+      var detail = data && data.detail ? data.detail : "Erreur " + res.status;
+      throw new Error(typeof detail === "string" ? detail : "Erreur");
+    }
+    return data;
+  }
+
+  function showLogin(msg) {
+    document.getElementById("app").classList.add("hidden");
+    document.getElementById("login").classList.remove("hidden");
+    document.getElementById("login-err").textContent = msg || "";
+  }
+
+  function showApp() {
+    document.getElementById("login").classList.add("hidden");
+    document.getElementById("app").classList.remove("hidden");
+  }
+
+  function q() {
+    return (document.getElementById("search").value || "").trim().toLowerCase();
+  }
+
+  function match(obj, keys) {
+    var needle = q();
+    if (!needle) return true;
+    return keys.some(function (k) {
+      return String(obj[k] == null ? "" : obj[k]).toLowerCase().indexOf(needle) !== -1;
+    });
+  }
+
+  function table(headers, rows) {
+    if (!rows.length) return '<div class="empty">Aucune donnee.</div>';
+    return "<table><thead><tr>" + headers.map(function (h) { return "<th>" + h + "</th>"; }).join("") +
+      "</tr></thead><tbody>" + rows.join("") + "</tbody></table>";
+  }
+
+  function typeLabel(t) {
+    if (t === "monthly") return "Mensuel";
+    if (t === "annual") return "Annuel";
+    if (t === "trial_14d") return "Essai 14 j";
+    return t || "—";
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return "—";
+    return String(iso).replace("T", " ").slice(0, 16);
+  }
+
+  async function loadAll() {
+    var results = await Promise.all([
+      api("/api/admin/cabinets"),
+      api("/api/admin/patients"),
+      api("/api/admin/payments"),
+      api("/api/admin/support"),
+      api("/api/admin/security"),
+      api("/api/admin/stats")
+    ]);
+    cache.cabinets = results[0];
+    cache.patients = results[1];
+    cache.payments = results[2];
+    cache.support = results[3];
+    cache.security = results[4];
+    cache.stats = results[5];
+    render();
+  }
+
+  function renderUsers() {
+    var list = cache.patients.filter(function (p) {
+      return match(p, ["cabinet_slug", "statut", "ticket_num"]);
+    });
+    var parStatut = {};
+    cache.patients.forEach(function (p) {
+      var s = p.statut || "—";
+      parStatut[s] = (parStatut[s] || 0) + 1;
+    });
+    document.getElementById("users-kpis").innerHTML =
+      '<div class="kpi"><small>Tickets</small><strong>' + cache.patients.length + '</strong><span>400 derniers</span></div>' +
+      '<div class="kpi"><small>En attente</small><strong>' + (parStatut.waiting || 0) + '</strong><span>statut waiting</span></div>' +
+      '<div class="kpi"><small>Cabinets</small><strong>' + cache.cabinets.length + '</strong><span>inscrits</span></div>' +
+      '<div class="kpi"><small>Affiches</small><strong>' + list.length + '</strong><span>filtre</span></div>';
+    var rows = list.map(function (p) {
+      return "<tr><td>" + esc(p.cabinet_slug) + "</td><td>P-" +
+        String(p.ticket_num).padStart(2, "0") + "</td><td>" +
+        badge(p.statut) + "</td><td>" + esc(fmtDate(p.created_at)) + "</td></tr>";
+    });
+    document.getElementById("users-table").innerHTML = table(
+      ["Cabinet", "Ticket", "Statut", "Date"],
+      rows
+    );
+  }
+
+  function renderPraticiens() {
+    var list = cache.cabinets.filter(function (c) {
+      return match(c, ["nom_medecin", "slug", "specialite", "wilaya", "telephone"]);
+    });
+    var rows = list.map(function (c) {
+      var etat = c.is_active ? badge("actif") : badge("inactif");
+      return "<tr><td>" + esc(c.nom_medecin) + "</td><td>" + esc(c.slug) + "</td><td>" +
+        esc(c.specialite) + "</td><td>" + esc(c.wilaya) + "</td><td>" + esc(c.telephone) + "</td><td>" +
+        etat + "</td><td>" + (c.total_issued || 0) + "</td><td>" +
+        '<button class="btn btn-ghost btn-sm" data-act="toggle" data-id="' + c.id + '">' +
+        (c.is_active ? "Desactiver" : "Activer") + "</button> " +
+        '<button class="btn btn-danger btn-sm" data-act="del" data-id="' + c.id + '" data-nom="' +
+        esc(c.nom_medecin) + '">Supprimer</button></td></tr>';
+    });
+    document.getElementById("praticiens-table").innerHTML = table(
+      ["Praticien", "Slug", "Specialite", "Wilaya", "Telephone", "Etat", "Tickets", "Actions"],
+      rows
+    );
+  }
+
+  function renderAbos() {
+    var list = cache.cabinets.filter(function (c) {
+      return match(c, ["nom_medecin", "slug", "subscription_type"]);
+    });
+    var rows = list.map(function (c) {
+      var jours = c.jours_restants == null ? "—" : c.jours_restants;
+      return "<tr><td>" + esc(c.nom_medecin) + "</td><td>" + typeLabel(c.subscription_type) + "</td><td>" +
+        esc(c.subscription_end) + "</td><td>" + jours + '</td><td>' +
+        '<select data-act="type" data-id="' + c.id + '">' +
+        '<option value="trial_14d"' + (c.subscription_type === "trial_14d" ? " selected" : "") + ">Essai 14 j</option>" +
+        '<option value="monthly"' + (c.subscription_type === "monthly" ? " selected" : "") + ">Mensuel</option>" +
+        '<option value="annual"' + (c.subscription_type === "annual" ? " selected" : "") + ">Annuel</option>" +
+        "</select> " +
+        '<button class="btn btn-ghost btn-sm" data-act="ext" data-id="' + c.id + '" data-days="30">+30 j</button> ' +
+        '<button class="btn btn-ghost btn-sm" data-act="ext" data-id="' + c.id + '" data-days="365">+365 j</button></td></tr>';
+    });
+    document.getElementById("abos-table").innerHTML = table(
+      ["Praticien", "Offre", "Echeance", "Jours restants", "Modifier"],
+      rows
+    );
+  }
+
+  function renderPaiements() {
+    var list = cache.payments.filter(function (p) {
+      return match(p, ["cabinet", "slug", "type", "statut"]);
+    });
+    var rows = list.map(function (p) {
+      return "<tr><td>" + esc(p.cabinet) + "</td><td>" + esc(p.slug) + "</td><td>" +
+        typeLabel(p.type) + "</td><td>" + (p.montant_da || 0) + " DA</td><td>" +
+        esc(p.echeance) + "</td><td>" + badge(p.statut) + "</td></tr>";
+    });
+    document.getElementById("paiements-table").innerHTML = table(
+      ["Cabinet", "Slug", "Offre", "Montant", "Echeance", "Statut"],
+      rows
+    );
+  }
+
+  function renderCa() {
+    var s = cache.stats || {};
+    var mensuels = cache.cabinets.filter(function (c) { return c.subscription_type === "monthly"; }).length;
+    var annuels = cache.cabinets.filter(function (c) { return c.subscription_type === "annual"; }).length;
+    var caM = s.ca_estime_mensuel_da || 0;
+    document.getElementById("ca-kpis").innerHTML =
+      '<div class="kpi"><small>CA mensuel estime</small><strong>' + caM + '</strong><span>DA</span></div>' +
+      '<div class="kpi"><small>CA annuel estime</small><strong>' + Math.round(caM * 12) + '</strong><span>DA</span></div>' +
+      '<div class="kpi"><small>Offres mensuelles</small><strong>' + mensuels + '</strong><span>2500 DA / mois</span></div>' +
+      '<div class="kpi"><small>Offres annuelles</small><strong>' + annuels + '</strong><span>36000 DA / an</span></div>';
+    document.getElementById("ca-detail").innerHTML =
+      "<p style='color:var(--soft);margin:0;line-height:1.6'>Estimation a partir des abonnements actifs (mensuel 2500 DA, annuel 36000 DA). Les essais gratuits ne sont pas factures. Aucun prestataire de paiement n'est encore branche : cette vue sert au suivi interne.</p>";
+  }
+
+  function renderSupport() {
+    var list = cache.support.filter(function (t) {
+      return match(t, ["nom", "email", "sujet", "statut"]);
+    });
+    var rows = list.map(function (t) {
+      var action = t.statut === "ouvert"
+        ? '<button class="btn btn-ghost btn-sm" data-act="close" data-id="' + t.id + '">Clore</button>'
+        : '<button class="btn btn-ghost btn-sm" data-act="open" data-id="' + t.id + '">Rouvrir</button>';
+      return "<tr><td>" + t.id + "</td><td>" + esc(t.nom) + "</td><td>" + esc(t.email) + "</td><td>" +
+        esc(t.sujet) + "</td><td>" + esc(t.message) + "</td><td>" + badge(t.statut) + "</td><td>" +
+        esc(fmtDate(t.created_at)) + "</td><td>" + action + "</td></tr>";
+    });
+    document.getElementById("support-table").innerHTML = table(
+      ["#", "Nom", "E-mail", "Sujet", "Message", "Statut", "Date", ""],
+      rows
+    );
+  }
+
+  function renderSecu() {
+    var sec = cache.security || { sessions: [], pin_attempts: [] };
+    var locked = (sec.pin_attempts || []).filter(function (p) { return p.locked; }).length;
+    document.getElementById("secu-kpis").innerHTML =
+      '<div class="kpi"><small>Sessions actives</small><strong>' + (sec.sessions || []).length + '</strong><span>' + (sec.session_hours || 12) + ' h</span></div>' +
+      '<div class="kpi"><small>PIN bloques</small><strong>' + locked + '</strong><span>max ' + (sec.max_pin_failures || 5) + ' echecs</span></div>' +
+      '<div class="kpi"><small>Verrouillage</small><strong>' + (sec.lock_minutes || 15) + '</strong><span>minutes</span></div>' +
+      '<div class="kpi"><small>Tentatives</small><strong>' + (sec.pin_attempts || []).length + '</strong><span>en memoire</span></div>';
+    var sRows = (sec.sessions || []).filter(function (s) {
+      return match(s, ["cabinet_slug"]);
+    }).map(function (s) {
+      return "<tr><td>" + s.id + "</td><td>" + esc(s.cabinet_slug) + "</td><td>" +
+        esc(fmtDate(s.created_at)) + "</td><td>" + esc(fmtDate(s.expires_at)) +
+        '</td><td><button class="btn btn-danger btn-sm" data-act="revoke" data-id="' + s.id + '">Revoquer</button></td></tr>';
+    });
+    document.getElementById("sessions-table").innerHTML = table(
+      ["ID", "Cabinet", "Creee", "Expire", ""],
+      sRows
+    );
+    var pRows = (sec.pin_attempts || []).filter(function (p) {
+      return match(p, ["slug", "ip"]);
+    }).map(function (p) {
+      return "<tr><td>" + esc(p.slug) + "</td><td>" + esc(p.ip) + "</td><td>" + p.fails + "</td><td>" +
+        badge(p.locked ? "locked" : "ok") + '</td><td><button class="btn btn-warn btn-sm" data-act="unlock" data-slug="' +
+        esc(p.slug) + '" data-ip="' + esc(p.ip) + '">Debloquer</button></td></tr>';
+    });
+    document.getElementById("pin-table").innerHTML = table(
+      ["Cabinet", "IP", "Echecs", "Etat", ""],
+      pRows
+    );
+  }
+
+  function renderStats() {
+    var s = cache.stats || {};
+    document.getElementById("stats-kpis").innerHTML =
+      '<div class="kpi"><small>Cabinets</small><strong>' + (s.total_cabinets || 0) + '</strong><span>' + (s.cabinets_actifs || 0) + ' actifs</span></div>' +
+      '<div class="kpi"><small>Essais</small><strong>' + (s.cabinets_en_essai || 0) + '</strong><span>14 jours</span></div>' +
+      '<div class="kpi"><small>Payants</small><strong>' + (s.cabinets_payants || 0) + '</strong><span>mensuel / annuel</span></div>' +
+      '<div class="kpi"><small>Tickets emis</small><strong>' + (s.total_tickets_emis || 0) + '</strong><span>tous cabinets</span></div>';
+    var wilayas = s.repartition_wilaya || {};
+    var rows = Object.keys(wilayas).sort().filter(function (w) {
+      return !q() || w.toLowerCase().indexOf(q()) !== -1;
+    }).map(function (w) {
+      return "<tr><td>" + esc(w) + "</td><td>" + wilayas[w] + "</td></tr>";
+    });
+    document.getElementById("wilaya-table").innerHTML = table(["Wilaya", "Cabinets"], rows);
+  }
+
+  function renderParams() {
+    document.getElementById("api-url").value = localStorage.getItem("tafwita_api") || "";
+  }
+
+  function render() {
+    renderUsers();
+    renderPraticiens();
+    renderAbos();
+    renderPaiements();
+    renderCa();
+    renderSupport();
+    renderSecu();
+    renderStats();
+    renderParams();
+  }
+
+  function go(view) {
+    currentView = view;
+    document.querySelectorAll(".nav-btn").forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-view") === view);
+    });
+    document.querySelectorAll(".view").forEach(function (v) {
+      v.classList.toggle("active", v.id === "view-" + view);
+    });
+    document.getElementById("page-title").textContent = TITLES[view] || view;
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("overlay").classList.remove("show");
+  }
+
+  document.getElementById("login-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    var err = document.getElementById("login-err");
+    err.textContent = "";
+    try {
+      var data = await fetch(apiBase() + "/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: document.getElementById("pwd").value })
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); });
+      if (!data.ok || !data.j.token) {
+        err.textContent = data.j.detail || "Mot de passe incorrect.";
+        return;
+      }
+      sessionStorage.setItem("tafwita_admin_token", data.j.token);
+      document.getElementById("pwd").value = "";
+      showApp();
+      await loadAll();
+    } catch (ex) {
+      err.textContent = "Impossible de joindre l'API (" + apiBase() + ").";
+    }
+  });
+
+  document.querySelectorAll(".nav-btn").forEach(function (b) {
+    b.addEventListener("click", function () { go(b.getAttribute("data-view")); });
+  });
+  document.getElementById("search").addEventListener("input", render);
+  document.getElementById("burger").addEventListener("click", function () {
+    document.getElementById("sidebar").classList.add("open");
+    document.getElementById("overlay").classList.add("show");
+  });
+  document.getElementById("overlay").addEventListener("click", function () {
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("overlay").classList.remove("show");
+  });
+  document.getElementById("btn-logout").addEventListener("click", function () {
+    sessionStorage.removeItem("tafwita_admin_token");
+    showLogin("");
+  });
+  document.getElementById("save-api").addEventListener("click", function () {
+    var v = document.getElementById("api-url").value.trim().replace(/\/$/, "");
+    if (v) localStorage.setItem("tafwita_api", v);
+    else localStorage.removeItem("tafwita_api");
+    toast("URL API enregistree.");
+  });
+
+  document.getElementById("view-praticiens").addEventListener("click", async function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    var id = btn.getAttribute("data-id");
+    try {
+      if (btn.getAttribute("data-act") === "toggle") {
+        await api("/api/admin/cabinets/" + id + "/toggle", { method: "POST" });
+        toast("Statut mis a jour.");
+        await loadAll();
+      }
+      if (btn.getAttribute("data-act") === "del") {
+        if (!confirm("Supprimer le cabinet " + btn.getAttribute("data-nom") + " ?")) return;
+        await api("/api/admin/cabinets/" + id, { method: "DELETE" });
+        toast("Cabinet supprime.");
+        await loadAll();
+      }
+    } catch (ex) { toast(ex.message); }
+  });
+
+  document.getElementById("view-abos").addEventListener("click", async function (e) {
+    var btn = e.target.closest("button");
+    if (!btn || btn.getAttribute("data-act") !== "ext") return;
+    var id = btn.getAttribute("data-id");
+    var days = parseInt(btn.getAttribute("data-days"), 10);
+    var sel = btn.parentElement.querySelector("select");
+    try {
+      await api("/api/admin/cabinets/" + id + "/subscription", {
+        method: "POST",
+        body: JSON.stringify({ subscription_type: sel.value, extend_days: days })
+      });
+      toast("Abonnement prolonge.");
+      await loadAll();
+    } catch (ex) { toast(ex.message); }
+  });
+  document.getElementById("view-abos").addEventListener("change", async function (e) {
+    var sel = e.target;
+    if (sel.getAttribute("data-act") !== "type") return;
+    try {
+      await api("/api/admin/cabinets/" + sel.getAttribute("data-id") + "/subscription", {
+        method: "POST",
+        body: JSON.stringify({ subscription_type: sel.value })
+      });
+      toast("Offre mise a jour.");
+      await loadAll();
+    } catch (ex) { toast(ex.message); }
+  });
+
+  document.getElementById("support-form").addEventListener("submit", async function (e) {
+    e.preventDefault();
+    try {
+      await api("/api/admin/support", {
+        method: "POST",
+        body: JSON.stringify({
+          nom: document.getElementById("s-nom").value,
+          email: document.getElementById("s-email").value || null,
+          sujet: document.getElementById("s-sujet").value,
+          message: document.getElementById("s-msg").value
+        })
+      });
+      e.target.reset();
+      toast("Ticket cree.");
+      await loadAll();
+    } catch (ex) { toast(ex.message); }
+  });
+  document.getElementById("support-table").addEventListener("click", async function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    var statut = btn.getAttribute("data-act") === "close" ? "ferme" : "ouvert";
+    try {
+      await api("/api/admin/support/" + btn.getAttribute("data-id") + "/statut", {
+        method: "POST",
+        body: JSON.stringify({ statut: statut })
+      });
+      await loadAll();
+    } catch (ex) { toast(ex.message); }
+  });
+
+  document.getElementById("view-secu").addEventListener("click", async function (e) {
+    var btn = e.target.closest("button");
+    if (!btn) return;
+    try {
+      if (btn.getAttribute("data-act") === "revoke") {
+        await api("/api/admin/sessions/" + btn.getAttribute("data-id"), { method: "DELETE" });
+        toast("Session revoquee.");
+        await loadAll();
+      }
+      if (btn.getAttribute("data-act") === "unlock") {
+        await api("/api/admin/security/unlock", {
+          method: "POST",
+          body: JSON.stringify({ slug: btn.getAttribute("data-slug"), ip: btn.getAttribute("data-ip") })
+        });
+        toast("PIN debloque.");
+        await loadAll();
+      }
+    } catch (ex) { toast(ex.message); }
+  });
+
+  if (token()) {
+    showApp();
+    loadAll().catch(function () { showLogin("Impossible de charger le tableau de bord."); });
+  }
+})();
+</script>
+</body>
+</html>
