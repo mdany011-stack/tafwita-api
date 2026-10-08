@@ -182,6 +182,7 @@ def assurer_colonnes():
 
 assurer_colonnes()
 
+TRIAL_DAYS = 45
 SESSION_HOURS = 12
 MAX_PIN_FAILURES = 5
 LOCK_MINUTES = 15
@@ -674,7 +675,7 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Ce numero de telephone est deja enregistre.")
 
-    trial_end = datetime.utcnow() + timedelta(days=14)
+    trial_end = datetime.utcnow() + timedelta(days=TRIAL_DAYS)
     cabinet = Cabinet(
         slug=slug, nom_medecin=data.nom_medecin, specialite=data.specialite,
         telephone=data.telephone, wilaya=data.wilaya, code_pin=hash_pin(data.code_pin),
@@ -685,7 +686,7 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
     db.refresh(cabinet)
     return {
         "status": "success",
-        "message": "Cabinet cree avec succes ! 14 jours d'essai actives.",
+        "message": f"Cabinet cree avec succes ! {TRIAL_DAYS} jours d'essai actives (promotion lancement).",
         "cabinet_slug": cabinet.slug,
         "trial_end": trial_end.strftime("%Y-%m-%d"),
     }
@@ -699,7 +700,7 @@ def trial_signup(data: TrialSignup, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Ce numero de telephone est deja enregistre.")
 
-    trial_end = datetime.utcnow() + timedelta(days=14)
+    trial_end = datetime.utcnow() + timedelta(days=TRIAL_DAYS)
     cabinet = Cabinet(
         slug=slug,
         nom_medecin=f"{data.prenom} {data.nom}",

@@ -410,7 +410,7 @@
   function typeLabel(t) {
     if (t === "monthly") return "Mensuel";
     if (t === "annual") return "Annuel";
-    if (t === "trial_14d") return "Essai 14 j";
+    if (t === "trial_14d") return "Essai 45 j";
     return t || "—";
   }
 
@@ -491,7 +491,7 @@
       return "<tr><td>" + esc(c.nom_medecin) + "</td><td>" + typeLabel(c.subscription_type) + "</td><td>" +
         esc(c.subscription_end) + "</td><td>" + jours + '</td><td>' +
         '<select data-act="type" data-id="' + c.id + '">' +
-        '<option value="trial_14d"' + (c.subscription_type === "trial_14d" ? " selected" : "") + ">Essai 14 j</option>" +
+        '<option value="trial_14d"' + (c.subscription_type === "trial_14d" ? " selected" : "") + ">Essai 45 j</option>" +
         '<option value="monthly"' + (c.subscription_type === "monthly" ? " selected" : "") + ">Mensuel</option>" +
         '<option value="annual"' + (c.subscription_type === "annual" ? " selected" : "") + ">Annuel</option>" +
         "</select> " +
@@ -587,7 +587,7 @@
     var s = cache.stats || {};
     document.getElementById("stats-kpis").innerHTML =
       '<div class="kpi"><small>Cabinets</small><strong>' + (s.total_cabinets || 0) + '</strong><span>' + (s.cabinets_actifs || 0) + ' actifs</span></div>' +
-      '<div class="kpi"><small>Essais</small><strong>' + (s.cabinets_en_essai || 0) + '</strong><span>14 jours</span></div>' +
+      '<div class="kpi"><small>Essais</small><strong>' + (s.cabinets_en_essai || 0) + '</strong><span>45 jours</span></div>' +
       '<div class="kpi"><small>Payants</small><strong>' + (s.cabinets_payants || 0) + '</strong><span>mensuel / annuel</span></div>' +
       '<div class="kpi"><small>Tickets emis</small><strong>' + (s.total_tickets_emis || 0) + '</strong><span>tous cabinets</span></div>';
     var wilayas = s.repartition_wilaya || {};
