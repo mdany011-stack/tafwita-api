@@ -6,6 +6,8 @@ from typing import Optional, List
 import bcrypt
 from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from html import escape
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
@@ -152,6 +154,17 @@ class CabinetSession(Base):
     expires_at = Column(DateTime, index=True)
 
 
+class SupportTicket(Base):
+    __tablename__ = "support_tickets"
+    id = Column(Integer, primary_key=True, index=True)
+    nom = Column(String)
+    email = Column(String, nullable=True)
+    sujet = Column(String)
+    message = Column(String)
+    statut = Column(String, default="ouvert", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 Base.metadata.create_all(bind=engine)
 
 
@@ -159,6 +172,10 @@ def assurer_colonnes():
     with engine.begin() as conn:
         try:
             conn.execute(text("ALTER TABLE patient_tickets ADD COLUMN suivi_token_hash VARCHAR"))
+        except Exception:
+            pass
+        try:
+            conn.execute(text("UPDATE patient_tickets SET nom_patient = NULL, telephone = NULL"))
         except Exception:
             pass
 
@@ -177,6 +194,8 @@ STATUTS_AVANT_VOUS = ("waiting", "returned", "urgent_requested", "urgent")
 STATUTS_APPELABLES = ("waiting", "returned", "urgent_requested")
 # Compteur memoire : (slug, ip) -> {fails, locked_until}
 _pin_attempts = {}
+# Nom / telephone patients : jamais en SQL, seulement en RAM le temps du relais cabinet.
+_pii_ephemere = {}
 
 # ============================================================
 # 3. APP
@@ -193,6 +212,36 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "healthy", "service": "tafwita-api"}
+
+
+_DIR_CODE = os.path.dirname(os.path.abspath(__file__))
+_PAGES_PUBLIQUES = {
+    "patient.html": "text/html; charset=utf-8",
+    "admin.html": "text/html; charset=utf-8",
+    "service-worker.js": "application/javascript; charset=utf-8",
+    "manifest.webmanifest": "application/manifest+json",
+    "icon-192.png": "image/png",
+    "icon-512.png": "image/png",
+}
+
+
+def servir_page_publique(nom: str):
+    if nom not in _PAGES_PUBLIQUES:
+        raise HTTPException(status_code=404, detail="Page introuvable.")
+    chemin = os.path.join(_DIR_CODE, nom)
+    if not os.path.isfile(chemin):
+        raise HTTPException(status_code=404, detail="Page introuvable.")
+    return FileResponse(chemin, media_type=_PAGES_PUBLIQUES[nom])
+
+
+@app.get("/patient.html")
+@app.get("/admin.html")
+@app.get("/service-worker.js")
+@app.get("/manifest.webmanifest")
+@app.get("/icon-192.png")
+@app.get("/icon-512.png")
+def page_statique(request: Request):
+    return servir_page_publique(request.url.path.lstrip("/"))
 
 @app.get("/api/test-email")
 def test_email(email: str, background_tasks: BackgroundTasks):
@@ -440,10 +489,38 @@ def exiger_suivi_si_present(ticket: PatientTicket, request: Request, body=None) 
         raise HTTPException(status_code=404, detail="Ticket introuvable.")
 
 
+def memoriser_pii(ticket_id: int, nom: Optional[str], tel: Optional[str]) -> None:
+    nom_ok = (nom or "").strip() or None
+    tel_ok = (tel or "").strip() or None
+    if nom_ok or tel_ok:
+        _pii_ephemere[ticket_id] = {"nom_patient": nom_ok, "telephone": tel_ok}
+
+
+def pii_ram(ticket_id: int) -> dict:
+    return _pii_ephemere.get(ticket_id) or {}
+
+
 def ticket_public_dict(t: PatientTicket) -> dict:
     d = ticket_to_dict(t)
     d["nom_patient"] = None
     d["telephone"] = None
+    return d
+
+
+def ticket_cabinet_dict(t: PatientTicket) -> dict:
+    d = ticket_to_dict(t)
+    extra = pii_ram(t.id)
+    if extra.get("nom_patient"):
+        d["nom_patient"] = extra["nom_patient"]
+    if extra.get("telephone"):
+        d["telephone"] = extra["telephone"]
+    return d
+
+
+def ticket_echo_dict(t: PatientTicket, nom: Optional[str], tel: Optional[str]) -> dict:
+    d = ticket_to_dict(t)
+    d["nom_patient"] = nom
+    d["telephone"] = tel
     return d
 
 
@@ -467,8 +544,8 @@ def ticket_to_dict(t: PatientTicket) -> dict:
         "id": t.id,
         "cabinet_slug": t.cabinet_slug,
         "ticket_num": t.ticket_num,
-        "nom_patient": t.nom_patient,
-        "telephone": t.telephone,
+        "nom_patient": None,
+        "telephone": None,
         "statut": t.statut,
         "notification_count": t.notification_count,
         "created_at": t.created_at.isoformat() if t.created_at else None,
@@ -565,6 +642,22 @@ class AdminLogin(BaseModel):
     password: str
 
 
+class SupportCreate(BaseModel):
+    nom: str
+    email: Optional[str] = None
+    sujet: str
+    message: str
+
+
+class SupportStatut(BaseModel):
+    statut: str
+
+
+class PinUnlock(BaseModel):
+    slug: str
+    ip: str
+
+
 # ============================================================
 # 5. ENDPOINTS GENERAUX
 # ============================================================
@@ -651,6 +744,97 @@ def cabinet_public(slug: str, db: Session = Depends(get_db)):
     return cabinet_public_dict(cabinet)
 
 
+def html_prise_ticket(cabinet: Cabinet) -> str:
+    nom = escape(cabinet.nom_medecin or "Cabinet")
+    spec = escape(cabinet.specialite or "")
+    slug = escape(cabinet.slug or "")
+    ouvert = (
+        bool(cabinet.accept_tickets)
+        and not cabinet.day_closed
+        and abonnement_ok(cabinet)
+        and prise_autorisee_horaire(cabinet)
+    )
+    etat = "ouverte" if ouvert else "fermee"
+    return f"""<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TAFWITA — {nom}</title>
+<style>
+body{{margin:0;background:#f5f8f8;color:#28373e;font:16px "Segoe UI",Arial,sans-serif}}
+.box{{max-width:420px;margin:0 auto;padding:28px 18px 40px}}
+.logo{{font-size:22px;font-weight:900;letter-spacing:.4px}}.logo span{{color:#329f9a}}
+h1{{font-size:26px;margin:18px 0 6px}}
+.sub{{color:#607078;margin:0 0 22px}}
+.card{{background:#fff;border:1px solid #dbeae7;border-radius:20px;padding:20px;box-shadow:0 12px 30px rgba(31,92,85,.09)}}
+label{{display:block;font-weight:700;margin:12px 0 6px}}
+input{{width:100%;height:52px;border:1px solid #dbeae7;border-radius:13px;padding:0 14px;font:inherit;box-sizing:border-box}}
+button{{width:100%;height:52px;margin-top:18px;border:0;border-radius:99px;background:linear-gradient(90deg,#329f9a,#55bcb2);color:#fff;font-weight:800;font-size:16px}}
+button:disabled{{opacity:.5}}
+.msg{{min-height:20px;margin-top:12px;color:#bc5d62;text-align:center;font-size:14px}}
+.num{{font-size:48px;font-weight:900;color:#237873;text-align:center;margin:12px 0}}
+.ok{{background:#e4f5ee;color:#2c8b69;border-radius:12px;padding:12px;text-align:center}}
+.warn{{background:#fff4de;color:#755714;border-radius:12px;padding:12px}}
+</style></head>
+<body data-slug="{slug}" data-ouvert="{etat}">
+<div class="box">
+<div class="logo">TAF<span>WITA</span></div>
+<h1>{nom}</h1>
+<p class="sub">{spec}</p>
+<div class="card" id="panel"></div>
+</div>
+<script>
+const slug=document.body.dataset.slug, ouvert=document.body.dataset.ouvert==="ouverte";
+const K="tafwita_qr_"+slug;
+function panel(h){{document.getElementById("panel").innerHTML=h}}
+function saved(){{try{{return JSON.parse(localStorage.getItem(K)||"null")}}catch(e){{return null}}}}
+async function j(r){{try{{return await r.json()}}catch(e){{return {{}}}}}}
+function form(){{
+  if(!ouvert){{panel('<div class="warn">La prise de tickets n est pas disponible actuellement.</div>');return;}}
+  panel('<label>Votre nom complet</label><input id="n" placeholder="Ex : Farid Cherif" required><label>Telephone (optionnel)</label><input id="t" placeholder="Ex : 0555 66 55 99"><button id="go" type="button">Prendre mon ticket</button><p class="msg" id="m"></p>');
+  document.getElementById("go").onclick=take;
+}}
+async function take(){{
+  const n=document.getElementById("n").value.trim(), t=document.getElementById("t").value.trim(), b=document.getElementById("go"), m=document.getElementById("m");
+  if(!n){{m.textContent="Le nom est obligatoire.";return;}}
+  b.disabled=true;m.textContent="";
+  try{{
+    const r=await fetch("/api/tickets/take",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{cabinet_slug:slug,nom_patient:n,telephone:t||null}})}});
+    const d=await j(r);
+    if(!r.ok)throw Error(d.detail||"Erreur");
+    const rec={{id:d.ticket.id,token:d.suivi_token,num:d.ticket.ticket_num,nom:n,tel:t||null}};
+    localStorage.setItem(K,JSON.stringify(rec));
+    show(rec,d.ticket);setInterval(function(){{follow(rec)}},6000);
+  }}catch(e){{m.textContent=e.message;b.disabled=false;}}
+}}
+function show(rec,t){{
+  const st=(t&&t.statut)||"waiting";
+  const before=(t&&t.waiting_before_you!=null)?t.waiting_before_you:"";
+  let extra="";
+  if(st==="serving")extra='<div class="ok">C est votre tour. Presentez-vous au cabinet.</div>';
+  else if(st==="cancelled")extra='<div class="warn">Votre ticket a ete annule.</div>';
+  else if(st==="completed")extra='<div class="ok">Consultation terminee.</div>';
+  else extra='<p class="sub" style="text-align:center">'+(before===""?"":before+" patient(s) avant vous")+'</p>';
+  panel('<p class="sub" style="text-align:center">Votre numero</p><div class="num">P-'+String(rec.num).padStart(2,"0")+'</div>'+extra);
+}}
+async function follow(rec){{
+  try{{
+    const r=await fetch("/api/tickets/"+rec.id+"/patient",{{headers:{{"X-Suivi-Token":rec.token||""}}}});
+    const d=await j(r);
+    if(r.ok&&d.ticket)show(rec,d.ticket);
+  }}catch(e){{}}
+}}
+const rec=saved();
+if(rec&&rec.id){{show(rec,null);follow(rec);setInterval(function(){{follow(rec)}},6000);}}
+else form();
+</script></body></html>"""
+
+
+@app.get("/p/{slug}", response_class=HTMLResponse)
+def page_prise_qr(slug: str, db: Session = Depends(get_db)):
+    cabinet = get_cabinet_or_404(db, slug)
+    return HTMLResponse(html_prise_ticket(cabinet))
+
+
 # D. PRENDRE UN TICKET (patient)
 @app.post("/api/tickets/take")
 def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
@@ -668,18 +852,19 @@ def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
     new_ticket = PatientTicket(
         cabinet_slug=cabinet.slug,
         ticket_num=cabinet.total_issued,
-        nom_patient=data.nom_patient,
-        telephone=data.telephone,
+        nom_patient=None,
+        telephone=None,
         suivi_token_hash=hash_jeton(brut),
     )
     db.add(new_ticket)
     db.commit()
     db.refresh(new_ticket)
+    memoriser_pii(new_ticket.id, data.nom_patient, data.telephone)
     log_event(db, new_ticket.id, "created")
 
     return {
         "status": "success",
-        "ticket": ticket_to_dict(new_ticket),
+        "ticket": ticket_echo_dict(new_ticket, data.nom_patient, data.telephone),
         "suivi_token": brut,
     }
 
@@ -806,14 +991,18 @@ def add_manual_ticket(
     new_ticket = PatientTicket(
         cabinet_slug=cabinet.slug,
         ticket_num=cabinet.total_issued,
-        nom_patient=data.nom_patient,
-        telephone=data.telephone,
+        nom_patient=None,
+        telephone=None,
     )
     db.add(new_ticket)
     db.commit()
     db.refresh(new_ticket)
+    memoriser_pii(new_ticket.id, data.nom_patient, data.telephone)
     log_event(db, new_ticket.id, "created_manual")
-    return {"status": "success", "ticket": ticket_to_dict(new_ticket)}
+    return {
+        "status": "success",
+        "ticket": ticket_echo_dict(new_ticket, data.nom_patient, data.telephone),
+    }
 
 
 # L. HISTORIQUE COMPLET DES TICKETS D'UN CABINET
@@ -827,7 +1016,7 @@ def cabinet_tickets(
 ):
     cabinet = authentifier_cabinet(db, slug, request, authorization, None, pin)
     tickets = db.query(PatientTicket).filter(PatientTicket.cabinet_slug == cabinet.slug).order_by(PatientTicket.id.desc()).all()
-    return [ticket_to_dict(t) for t in tickets]
+    return [ticket_cabinet_dict(t) for t in tickets]
 
 
 # M. ANNULER UN TICKET APRES 5 PASSAGES (cabinet)
@@ -988,7 +1177,7 @@ def get_queue_state(
         prive = cab is not None and cab.slug == cabinet.slug
 
     tickets_out = [
-        ticket_to_dict(t) if prive else ticket_public_dict(t) for t in tickets
+        ticket_cabinet_dict(t) if prive else ticket_public_dict(t) for t in tickets
     ]
 
     return {
@@ -1077,7 +1266,7 @@ def call_next(
         "message": f"Patient P-{next_ticket.ticket_num:02d} appelé.",
         "ticket_id": next_ticket.id,
         "ticket_num": next_ticket.ticket_num,
-        "nom_patient": next_ticket.nom_patient,
+        "nom_patient": pii_ram(next_ticket.id).get("nom_patient"),
         "statut": next_ticket.statut,
         "display_serving": f"N deg P-{next_ticket.ticket_num:02d}"
     }
@@ -1173,3 +1362,145 @@ def admin_login(data: AdminLogin):
     if data.password != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Mot de passe incorrect.")
     return {"status": "success", "token": ADMIN_TOKEN}
+
+
+@app.get("/api/admin/patients")
+def admin_list_patients(db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
+    tickets = (
+        db.query(PatientTicket)
+        .order_by(PatientTicket.created_at.desc())
+        .limit(400)
+        .all()
+    )
+    return [
+        {
+            "id": t.id,
+            "cabinet_slug": t.cabinet_slug,
+            "ticket_num": t.ticket_num,
+            "statut": t.statut,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in tickets
+    ]
+
+
+@app.get("/api/admin/payments")
+def admin_list_payments(db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
+    prix = {"monthly": 2500, "annual": 36000}
+    now = datetime.utcnow()
+    rows = []
+    for c in db.query(Cabinet).order_by(Cabinet.id.desc()).all():
+        montant = prix.get(c.subscription_type)
+        if not montant:
+            continue
+        expire = c.subscription_end and c.subscription_end < now
+        rows.append({
+            "id": c.id,
+            "cabinet": c.nom_medecin,
+            "slug": c.slug,
+            "type": c.subscription_type,
+            "montant_da": montant,
+            "echeance": c.subscription_end.strftime("%Y-%m-%d") if c.subscription_end else None,
+            "statut": "expire" if expire else ("actif" if c.is_active else "inactif"),
+        })
+    return rows
+
+
+@app.get("/api/admin/security")
+def admin_security(db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
+    now = datetime.utcnow()
+    sessions = (
+        db.query(CabinetSession)
+        .filter(CabinetSession.expires_at > now)
+        .order_by(CabinetSession.created_at.desc())
+        .all()
+    )
+    tentatives = []
+    for (slug, ip), rec in _pin_attempts.items():
+        locked_until = rec.get("locked_until")
+        tentatives.append({
+            "slug": slug,
+            "ip": ip,
+            "fails": rec.get("fails", 0),
+            "locked": bool(locked_until and locked_until > now),
+        })
+    return {
+        "sessions": [
+            {
+                "id": s.id,
+                "cabinet_slug": s.cabinet_slug,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "expires_at": s.expires_at.isoformat() if s.expires_at else None,
+            }
+            for s in sessions
+        ],
+        "pin_attempts": tentatives,
+        "session_hours": SESSION_HOURS,
+        "max_pin_failures": MAX_PIN_FAILURES,
+        "lock_minutes": LOCK_MINUTES,
+    }
+
+
+@app.post("/api/admin/security/unlock")
+def admin_unlock_pin(data: PinUnlock, auth: bool = Depends(check_admin)):
+    reset_echec_pin(data.slug, data.ip)
+    return {"status": "success"}
+
+
+@app.delete("/api/admin/sessions/{session_id}")
+def admin_revoke_session(session_id: int, db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
+    session = db.query(CabinetSession).filter(CabinetSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session introuvable.")
+    db.delete(session)
+    db.commit()
+    return {"status": "success"}
+
+
+@app.get("/api/admin/support")
+def admin_list_support(db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
+    tickets = db.query(SupportTicket).order_by(SupportTicket.id.desc()).all()
+    return [
+        {
+            "id": t.id,
+            "nom": t.nom,
+            "email": t.email,
+            "sujet": t.sujet,
+            "message": t.message,
+            "statut": t.statut,
+            "created_at": t.created_at.isoformat() if t.created_at else None,
+        }
+        for t in tickets
+    ]
+
+
+@app.post("/api/admin/support")
+def admin_create_support(data: SupportCreate, db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
+    ticket = SupportTicket(
+        nom=data.nom,
+        email=data.email,
+        sujet=data.sujet,
+        message=data.message,
+        statut="ouvert",
+    )
+    db.add(ticket)
+    db.commit()
+    db.refresh(ticket)
+    return {"status": "success", "id": ticket.id}
+
+
+@app.post("/api/admin/support/{ticket_id}/statut")
+def admin_support_statut(
+    ticket_id: int,
+    data: SupportStatut,
+    db: Session = Depends(get_db),
+    auth: bool = Depends(check_admin),
+):
+    if data.statut not in ("ouvert", "ferme"):
+        raise HTTPException(status_code=400, detail="Statut invalide.")
+    ticket = db.query(SupportTicket).filter(SupportTicket.id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket support introuvable.")
+    ticket.statut = data.statut
+    db.commit()
+    return {"status": "success", "statut": ticket.statut}
