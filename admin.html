@@ -275,7 +275,7 @@
             <div class="table-wrap" id="sessions-table"></div>
           </div>
           <div class="card">
-            <h2>Tentatives PIN</h2>
+            <h2>Tentatives mot de passe</h2>
             <div class="table-wrap" id="pin-table"></div>
           </div>
         </section>
@@ -556,7 +556,7 @@
     var locked = (sec.pin_attempts || []).filter(function (p) { return p.locked; }).length;
     document.getElementById("secu-kpis").innerHTML =
       '<div class="kpi"><small>Sessions actives</small><strong>' + (sec.sessions || []).length + '</strong><span>' + (sec.session_hours || 12) + ' h</span></div>' +
-      '<div class="kpi"><small>PIN bloques</small><strong>' + locked + '</strong><span>max ' + (sec.max_pin_failures || 5) + ' echecs</span></div>' +
+      '<div class="kpi"><small>Comptes bloques</small><strong>' + locked + '</strong><span>max ' + (sec.max_pin_failures || 5) + ' echecs</span></div>' +
       '<div class="kpi"><small>Verrouillage</small><strong>' + (sec.lock_minutes || 15) + '</strong><span>minutes</span></div>' +
       '<div class="kpi"><small>Tentatives</small><strong>' + (sec.pin_attempts || []).length + '</strong><span>en memoire</span></div>';
     var sRows = (sec.sessions || []).filter(function (s) {
@@ -765,7 +765,7 @@
           method: "POST",
           body: JSON.stringify({ slug: btn.getAttribute("data-slug"), ip: btn.getAttribute("data-ip") })
         });
-        toast("PIN debloque.");
+        toast("Compte debloque.");
         await loadAll();
       }
     } catch (ex) { toast(ex.message); }
