@@ -313,6 +313,7 @@ _PAGES_PUBLIQUES = {
     "admin.html": "text/html; charset=utf-8",
     "service-worker.js": "application/javascript; charset=utf-8",
     "manifest.webmanifest": "application/manifest+json",
+    "manifest-cabinet.webmanifest": "application/manifest+json",
     "icon-192.png": "image/png",
     "icon-512.png": "image/png",
 }
@@ -332,6 +333,7 @@ def servir_page_publique(nom: str):
 @app.get("/admin.html")
 @app.get("/service-worker.js")
 @app.get("/manifest.webmanifest")
+@app.get("/manifest-cabinet.webmanifest")
 @app.get("/icon-192.png")
 @app.get("/icon-512.png")
 def page_statique(request: Request):
