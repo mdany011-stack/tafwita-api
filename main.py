@@ -1,4 +1,5 @@
 import hashlib
+import io
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -18,6 +19,96 @@ import ssl
 import smtplib
 from email.message import EmailMessage
 from fastapi import BackgroundTasks
+
+
+def _pages_base() -> str:
+    return os.getenv(
+        "TAFWITA_PATIENT_URL",
+        "https://mdany011-stack.github.io/tafwita",
+    ).rstrip("/")
+
+
+def patient_take_url(slug: str) -> str:
+    from urllib.parse import quote
+    return f"{_pages_base()}/patient.html?cabinet={quote(slug, safe='')}&take=1"
+
+
+def cabinet_console_url() -> str:
+    return f"{_pages_base()}/cabinet.html"
+
+
+def make_affiche_png(nom: str, specialite: str, url: str) -> bytes:
+    import qrcode
+    from PIL import Image, ImageDraw, ImageFont
+
+    W, H = 1240, 1754
+    bg, dark, pale, soft, border = "#F5F8F8", "#237873", "#DDF2EE", "#607078", "#DBEAE7"
+    img = Image.new("RGB", (W, H), bg)
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()
+    draw.rectangle((0, 0, W, 210), fill=dark)
+
+    def centre(y, text, fill):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        draw.text(((W - (bbox[2] - bbox[0])) / 2, y), text, font=font, fill=fill)
+
+    centre(50, "TAFWITA", "white")
+    centre(110, "Votre consultation, au bon moment", pale)
+    centre(260, nom or "Cabinet", dark)
+    if specialite:
+        centre(300, specialite, soft)
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=14, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    qimg = qr.make_image(fill_color=dark, back_color="white").convert("RGB").resize((640, 640))
+    qx, qy = (W - 640) // 2, 420
+    box = (qx - 28, qy - 28, qx + 668, qy + 668)
+    if hasattr(draw, "rounded_rectangle"):
+        draw.rounded_rectangle(box, radius=28, fill="white", outline=border, width=3)
+    else:
+        draw.rectangle(box, fill="white", outline=border, width=3)
+    img.paste(qimg, (qx, qy))
+    centre(1140, "Scannez pour prendre un ticket", dark)
+    centre(1180, "Entrez votre nom sur votre telephone.", soft)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str):
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    if not (smtp_host and smtp_user and smtp_pass and to_email):
+        return
+    smtp_port = int(os.getenv("SMTP_PORT", "465"))
+    mail_from = os.getenv("MAIL_FROM", smtp_user)
+    take_url = patient_take_url(slug)
+    console_url = cabinet_console_url()
+    body = (
+        "Bonjour,\n\n"
+        "Votre cabinet TAFWITA est pret (essai 45 jours).\n\n"
+        f"Identifiant cabinet : {slug}\n"
+        f"Console secretaire (telephone) : {console_url}\n"
+        f"Page patient pour le QR : {take_url}\n\n"
+        "L'affiche QR est en piece jointe. Imprimez-la et affichez-la au cabinet.\n"
+        "Le PIN n'est pas envoye par e-mail. Utilisez celui choisi a l'inscription.\n\n"
+        "TAFWITA"
+    )
+    try:
+        png = make_affiche_png(nom, specialite, take_url)
+        msg = EmailMessage()
+        msg["Subject"] = "TAFWITA — votre cabinet et votre affiche QR"
+        msg["From"] = mail_from
+        msg["To"] = to_email
+        msg.set_content(body)
+        msg.add_attachment(png, maintype="image", subtype="png", filename="tafwita-affiche-qr.png")
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+    except Exception:
+        return
 
 
 def send_confirmation_email(to_email: str, verify_url: str):
@@ -218,6 +309,7 @@ def health():
 _DIR_CODE = os.path.dirname(os.path.abspath(__file__))
 _PAGES_PUBLIQUES = {
     "patient.html": "text/html; charset=utf-8",
+    "cabinet.html": "text/html; charset=utf-8",
     "admin.html": "text/html; charset=utf-8",
     "service-worker.js": "application/javascript; charset=utf-8",
     "manifest.webmanifest": "application/manifest+json",
@@ -236,6 +328,7 @@ def servir_page_publique(nom: str):
 
 
 @app.get("/patient.html")
+@app.get("/cabinet.html")
 @app.get("/admin.html")
 @app.get("/service-worker.js")
 @app.get("/manifest.webmanifest")
@@ -694,7 +787,7 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
 
 # A2. INSCRIPTION ESSAI GRATUIT (popup du site vitrine)
 @app.post("/api/trial-signup")
-def trial_signup(data: TrialSignup, db: Session = Depends(get_db)):
+def trial_signup(data: TrialSignup, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     slug = data.cabinet.lower().replace(" ", "-").replace(".", "")
     existing = db.query(Cabinet).filter(Cabinet.telephone == data.telephone).first()
     if existing:
@@ -713,10 +806,18 @@ def trial_signup(data: TrialSignup, db: Session = Depends(get_db)):
     db.add(cabinet)
     db.commit()
     db.refresh(cabinet)
+    background_tasks.add_task(
+        send_trial_welcome_email,
+        data.email,
+        cabinet.slug,
+        cabinet.nom_medecin or data.cabinet,
+        cabinet.specialite or "",
+    )
     return {
         "status": "success",
         "message": "Demande envoyee. Verifiez votre e-mail.",
         "cabinet_slug": cabinet.slug,
+        "console_url": cabinet_console_url(),
     }
 
 
