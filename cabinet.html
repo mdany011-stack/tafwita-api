@@ -53,13 +53,31 @@ label{display:block;font-weight:700;margin:12px 0 6px;font-size:13px}
 .modal .back{position:absolute;inset:0;background:rgba(18,32,40,.5)}
 .dialog{position:relative;z-index:1;width:min(520px,100%);max-height:90vh;overflow:auto;background:#fff;border-radius:20px;padding:20px}
 .hidden{display:none!important}
+#installAppBtn{display:none;align-items:center;justify-content:center}
 </style>
+<link rel="manifest" href="./manifest-cabinet.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TAFWITA Cab">
+<link rel="apple-touch-icon" href="./icon-192.png">
 </head>
 <body>
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./service-worker.js").catch(function () {});
+  });
+}
+</script>
 <div class="shell">
   <header class="top">
     <div><div class="logo">TAF<span>WITA</span></div><p class="sub" data-i="sub">Console cabinet</p></div>
-    <div class="tools"><button class="tool" id="language">FR</button><button class="tool hidden" id="logoutBtn" data-i="logout">Quitter</button></div>
+    <div class="tools">
+      <button class="tool" id="language">FR</button>
+      <button class="tool" id="installAppBtn" type="button" data-i="install">Installer</button>
+      <button class="tool hidden" id="logoutBtn" data-i="logout">Quitter</button>
+    </div>
   </header>
 
   <section class="view active" id="login">
@@ -156,9 +174,9 @@ const LK="tafwita_patient_v5_language", CK="tafwita_cabinet_session";
 let lang=localStorage.getItem(LK)||"FR";
 let sess=null, data={}, page="home", timer=null;
 const I={
-FR:{sub:"Console cabinet",logout:"Quitter",loginTitle:"Connexion cabinet",loginLead:"Identifiant recu a l'inscription, et PIN a 6 chiffres. Fonctionne sur telephone.",lblSlug:"Identifiant cabinet",lblPin:"PIN (6 chiffres)",loginBtn:"Ouvrir la file",stServing:"En consultation",stWait:"En attente",stTotal:"Tickets du jour",dayTitle:"Gestion de la journee",queueTitle:"File en direct",histTitle:"Historique",histLead:"Tickets du cabinet sur cet appareil.",setTitle:"Horaires et regles",setLead:"Les patients peuvent prendre un ticket avant l'ouverture.",lblMode:"Mode de fermeture",lblStart:"Debut prise de tickets",lblEnd:"Fin auto prise",lblOpen:"Ouverture cabinet",lblClose:"Fermeture prevue",lblMax:"Maximum tickets par jour",save:"Enregistrer",navHome:"Accueil",navHist:"Historique",navSet:"Horaires",addTitle:"Ticket papier",lblNom:"Nom du patient",lblTel:"Telephone (optionnel)",addOk:"Ajouter",cancel:"Annuler",close:"Fermer",empty:"Aucun ticket actif.",noHist:"Aucun historique.",loading:"Chargement...",ok:"Operation enregistree.",needPin:"PIN a 6 chiffres obligatoire.",needSlug:"Identifiant obligatoire.",closed:"JOURNEE CLOTUREE",active:"PRISE ACTIVE",stopped:"PRISE ARRETEE",waiting:"En attente",returned:"Remis en attente",suspended:"Suspendu",urgent:"Priorite medicale",urgent_requested:"Demande de priorite",serving:"En consultation",completed:"Termine",cancelled:"Annule",startQ:"Demarrer une nouvelle journee ?",closeQ:"Cloturer la journee ? Les tickets restants seront annules.",urgentQ:"Motif urgence :",cancelNeed:"Annulation impossible : passages insuffisants (5 requis).",cancelQ:"Confirmer l'annulation ?"},
-EN:{sub:"Clinic console",logout:"Log out",loginTitle:"Clinic login",loginLead:"Use the login from signup and the 6-digit PIN. Works on a phone.",lblSlug:"Clinic login",lblPin:"PIN (6 digits)",loginBtn:"Open the queue",stServing:"Being seen",stWait:"Waiting",stTotal:"Tickets today",dayTitle:"Day controls",queueTitle:"Live queue",histTitle:"History",histLead:"Clinic tickets on this device.",setTitle:"Hours and rules",setLead:"Patients can take a ticket before opening time.",lblMode:"Closing mode",lblStart:"Ticket intake start",lblEnd:"Auto intake end",lblOpen:"Clinic opening",lblClose:"Planned closing",lblMax:"Maximum tickets per day",save:"Save",navHome:"Home",navHist:"History",navSet:"Hours",addTitle:"Paper ticket",lblNom:"Patient name",lblTel:"Phone (optional)",addOk:"Add",cancel:"Cancel",close:"Close",empty:"No active ticket.",noHist:"No history.",loading:"Loading...",ok:"Saved.",needPin:"The PIN must have 6 digits.",needSlug:"Login is required.",closed:"DAY CLOSED",active:"INTAKE ON",stopped:"INTAKE OFF",waiting:"Waiting",returned:"Back in queue",suspended:"Suspended",urgent:"Medical priority",urgent_requested:"Priority request",serving:"Being seen",completed:"Done",cancelled:"Cancelled",startQ:"Start a new day?",closeQ:"Close the day? Remaining tickets will be cancelled.",urgentQ:"Priority reason:",cancelNeed:"Cancel not allowed: not enough no-shows (5 required).",cancelQ:"Confirm cancellation?"},
-AR:{sub:"شاشة العيادة",logout:"خروج",loginTitle:"دخول العيادة",loginLead:"المعرّف المستلم عند التسجيل ورمز PIN من 6 أرقام. يعمل على الهاتف.",lblSlug:"معرّف العيادة",lblPin:"رمز PIN (6 أرقام)",loginBtn:"فتح الطابور",stServing:"قيد المعاينة",stWait:"في الانتظار",stTotal:"تذاكر اليوم",dayTitle:"إدارة اليوم",queueTitle:"الطابور مباشر",histTitle:"السجل",histLead:"تذاكر العيادة على هذا الجهاز.",setTitle:"الأوقات والقواعد",setLead:"يمكن للمرضى أخذ تذكرة قبل الافتتاح.",lblMode:"وضع الإغلاق",lblStart:"بداية أخذ التذاكر",lblEnd:"نهاية أخذ التذاكر",lblOpen:"افتتاح العيادة",lblClose:"الإغلاق المتوقع",lblMax:"الحد الأقصى للتذاكر في اليوم",save:"حفظ",navHome:"الرئيسية",navHist:"السجل",navSet:"الأوقات",addTitle:"تذكرة ورقية",lblNom:"اسم المريض",lblTel:"الهاتف (اختياري)",addOk:"إضافة",cancel:"إلغاء",close:"إغلاق",empty:"لا توجد تذكرة نشطة.",noHist:"لا يوجد سجل.",loading:"جار التحميل...",ok:"تم التسجيل.",needPin:"يجب أن يحتوي رمز PIN على 6 أرقام.",needSlug:"المعرّف إلزامي.",closed:"اليوم مغلق",active:"الأخذ مفتوح",stopped:"الأخذ متوقف",waiting:"في الانتظار",returned:"عاد للقائمة",suspended:"معلق",urgent:"أولوية طبية",urgent_requested:"طلب أولوية",serving:"قيد المعاينة",completed:"انتهى",cancelled:"ملغى",startQ:"بدء يوم جديد؟",closeQ:"إغلاق اليوم؟ سيتم إلغاء التذاكر المتبقية.",urgentQ:"سبب الأولوية:",cancelNeed:"الإلغاء غير ممكن: عدد النداءات غير كاف (5 مطلوبة).",cancelQ:"تأكيد الإلغاء؟"}
+FR:{sub:"Console cabinet",logout:"Quitter",install:"Installer",installHint:"Ouvrez le menu du navigateur puis Ajouter a l ecran d accueil",loginTitle:"Connexion cabinet",loginLead:"Identifiant recu a l'inscription, et PIN a 6 chiffres. Fonctionne sur telephone.",lblSlug:"Identifiant cabinet",lblPin:"PIN (6 chiffres)",loginBtn:"Ouvrir la file",stServing:"En consultation",stWait:"En attente",stTotal:"Tickets du jour",dayTitle:"Gestion de la journee",queueTitle:"File en direct",histTitle:"Historique",histLead:"Tickets du cabinet sur cet appareil.",setTitle:"Horaires et regles",setLead:"Les patients peuvent prendre un ticket avant l'ouverture.",lblMode:"Mode de fermeture",lblStart:"Debut prise de tickets",lblEnd:"Fin auto prise",lblOpen:"Ouverture cabinet",lblClose:"Fermeture prevue",lblMax:"Maximum tickets par jour",save:"Enregistrer",navHome:"Accueil",navHist:"Historique",navSet:"Horaires",addTitle:"Ticket papier",lblNom:"Nom du patient",lblTel:"Telephone (optionnel)",addOk:"Ajouter",cancel:"Annuler",close:"Fermer",empty:"Aucun ticket actif.",noHist:"Aucun historique.",loading:"Chargement...",ok:"Operation enregistree.",needPin:"PIN a 6 chiffres obligatoire.",needSlug:"Identifiant obligatoire.",closed:"JOURNEE CLOTUREE",active:"PRISE ACTIVE",stopped:"PRISE ARRETEE",waiting:"En attente",returned:"Remis en attente",suspended:"Suspendu",urgent:"Priorite medicale",urgent_requested:"Demande de priorite",serving:"En consultation",completed:"Termine",cancelled:"Annule",startQ:"Demarrer une nouvelle journee ?",closeQ:"Cloturer la journee ? Les tickets restants seront annules.",urgentQ:"Motif urgence :",cancelNeed:"Annulation impossible : passages insuffisants (5 requis).",cancelQ:"Confirmer l'annulation ?"},
+EN:{sub:"Clinic console",logout:"Log out",install:"Install",installHint:"Open the browser menu, then Add to Home Screen",loginTitle:"Clinic login",loginLead:"Use the login from signup and the 6-digit PIN. Works on a phone.",lblSlug:"Clinic login",lblPin:"PIN (6 digits)",loginBtn:"Open the queue",stServing:"Being seen",stWait:"Waiting",stTotal:"Tickets today",dayTitle:"Day controls",queueTitle:"Live queue",histTitle:"History",histLead:"Clinic tickets on this device.",setTitle:"Hours and rules",setLead:"Patients can take a ticket before opening time.",lblMode:"Closing mode",lblStart:"Ticket intake start",lblEnd:"Auto intake end",lblOpen:"Clinic opening",lblClose:"Planned closing",lblMax:"Maximum tickets per day",save:"Save",navHome:"Home",navHist:"History",navSet:"Hours",addTitle:"Paper ticket",lblNom:"Patient name",lblTel:"Phone (optional)",addOk:"Add",cancel:"Cancel",close:"Close",empty:"No active ticket.",noHist:"No history.",loading:"Loading...",ok:"Saved.",needPin:"The PIN must have 6 digits.",needSlug:"Login is required.",closed:"DAY CLOSED",active:"INTAKE ON",stopped:"INTAKE OFF",waiting:"Waiting",returned:"Back in queue",suspended:"Suspended",urgent:"Medical priority",urgent_requested:"Priority request",serving:"Being seen",completed:"Done",cancelled:"Cancelled",startQ:"Start a new day?",closeQ:"Close the day? Remaining tickets will be cancelled.",urgentQ:"Priority reason:",cancelNeed:"Cancel not allowed: not enough no-shows (5 required).",cancelQ:"Confirm cancellation?"},
+AR:{sub:"شاشة العيادة",logout:"خروج",install:"تثبيت",installHint:"افتح قائمة المتصفح ثم أضف إلى الشاشة الرئيسية",loginTitle:"دخول العيادة",loginLead:"المعرّف المستلم عند التسجيل ورمز PIN من 6 أرقام. يعمل على الهاتف.",lblSlug:"معرّف العيادة",lblPin:"رمز PIN (6 أرقام)",loginBtn:"فتح الطابور",stServing:"قيد المعاينة",stWait:"في الانتظار",stTotal:"تذاكر اليوم",dayTitle:"إدارة اليوم",queueTitle:"الطابور مباشر",histTitle:"السجل",histLead:"تذاكر العيادة على هذا الجهاز.",setTitle:"الأوقات والقواعد",setLead:"يمكن للمرضى أخذ تذكرة قبل الافتتاح.",lblMode:"وضع الإغلاق",lblStart:"بداية أخذ التذاكر",lblEnd:"نهاية أخذ التذاكر",lblOpen:"افتتاح العيادة",lblClose:"الإغلاق المتوقع",lblMax:"الحد الأقصى للتذاكر في اليوم",save:"حفظ",navHome:"الرئيسية",navHist:"السجل",navSet:"الأوقات",addTitle:"تذكرة ورقية",lblNom:"اسم المريض",lblTel:"الهاتف (اختياري)",addOk:"إضافة",cancel:"إلغاء",close:"إغلاق",empty:"لا توجد تذكرة نشطة.",noHist:"لا يوجد سجل.",loading:"جار التحميل...",ok:"تم التسجيل.",needPin:"يجب أن يحتوي رمز PIN على 6 أرقام.",needSlug:"المعرّف إلزامي.",closed:"اليوم مغلق",active:"الأخذ مفتوح",stopped:"الأخذ متوقف",waiting:"في الانتظار",returned:"عاد للقائمة",suspended:"معلق",urgent:"أولوية طبية",urgent_requested:"طلب أولوية",serving:"قيد المعاينة",completed:"انتهى",cancelled:"ملغى",startQ:"بدء يوم جديد؟",closeQ:"إغلاق اليوم؟ سيتم إلغاء التذاكر المتبقية.",urgentQ:"سبب الأولوية:",cancelNeed:"الإلغاء غير ممكن: عدد النداءات غير كاف (5 مطلوبة).",cancelQ:"تأكيد الإلغاء؟"}
 };
 const $=id=>document.getElementById(id),tr=k=>I[lang]&&I[lang][k]||I.FR[k]||k;
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
@@ -295,6 +313,22 @@ $("traceBack").onclick=$("traceClose").onclick=()=>$("traceModal").classList.rem
 try{sess=JSON.parse(localStorage.getItem(CK)||"null")}catch{sess=null}
 translate();
 if(sess&&sess.token&&sess.slug){showApp();startPoll();refresh()}else showLogin();
+
+let deferredInstallPrompt=null;
+const installAppBtn=$("installAppBtn");
+const standalone=window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone;
+if(installAppBtn&&!standalone)installAppBtn.style.display="inline-flex";
+window.addEventListener("beforeinstallprompt",e=>{
+  e.preventDefault();deferredInstallPrompt=e;
+  if(installAppBtn)installAppBtn.style.display="inline-flex";
+});
+if(installAppBtn)installAppBtn.onclick=async()=>{
+  if(!deferredInstallPrompt){toast(tr("installHint"));return;}
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt=null;installAppBtn.style.display="none";
+};
+window.addEventListener("appinstalled",()=>{if(installAppBtn)installAppBtn.style.display="none";});
 </script>
 </body>
 </html>
