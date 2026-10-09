@@ -1,0 +1,32 @@
+{
+  "id": "./cabinet.html",
+  "name": "TAFWITA Cabinet",
+  "short_name": "TAFWITA Cab",
+  "description": "Gerer la file d'attente du cabinet depuis le telephone.",
+  "lang": "fr",
+  "start_url": "./cabinet.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#329F9A",
+  "background_color": "#F5F8F8",
+  "categories": [
+    "medical",
+    "health",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
