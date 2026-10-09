@@ -92,7 +92,7 @@ def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str
         f"Console secretaire (telephone) : {console_url}\n"
         f"Page patient pour le QR : {take_url}\n\n"
         "L'affiche QR est en piece jointe. Imprimez-la et affichez-la au cabinet.\n"
-        "Le PIN n'est pas envoye par e-mail. Utilisez celui choisi a l'inscription.\n\n"
+        "Le mot de passe n'est pas envoye par e-mail. Utilisez celui choisi a l'inscription.\n\n"
         "TAFWITA"
     )
     try:
@@ -181,7 +181,7 @@ engine = create_engine(DATABASE_URL or "sqlite:///./fallback.db")
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "tafwita-admin-2026")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN") or ""
 
 
 # ============================================================
@@ -197,7 +197,7 @@ class Cabinet(Base):
     wilaya = Column(String)
     code_pin = Column(String)
     is_active = Column(Boolean, default=True)
-    subscription_type = Column(String, default="trial_14d")
+    subscription_type = Column(String, default="trial_45d")
     subscription_end = Column(DateTime)
     serving_num = Column(Integer, default=0)
     total_issued = Column(Integer, default=0)
@@ -295,7 +295,12 @@ _pii_ephemere = {}
 app = FastAPI(title="TAFWITA API Cloud", description="Gestion des files et des abonnements")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://mdany011-stack.github.io",
+        "http://localhost",
+        "http://127.0.0.1",
+    ],
+    allow_origin_regex=r"https://mdany011-stack\.github\.io|http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -339,20 +344,6 @@ def servir_page_publique(nom: str):
 def page_statique(request: Request):
     return servir_page_publique(request.url.path.lstrip("/"))
 
-@app.get("/api/test-email")
-def test_email(email: str, background_tasks: BackgroundTasks):
-    verify_url = f"{os.getenv('PUBLIC_SITE_URL')}/confirm-email.html?token=test123"
-
-    background_tasks.add_task(
-        send_confirmation_email,
-        email,
-        verify_url
-    )
-
-    return {
-        "status": "ok",
-        "message": "E-mail en cours d'envoi."
-    }
 
 
 
@@ -369,7 +360,7 @@ def get_db():
 
 
 def check_admin(x_admin_token: Optional[str] = Header(None)):
-    if x_admin_token != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or not x_admin_token or x_admin_token != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Non autorise.")
     return True
 
@@ -390,6 +381,57 @@ def get_ticket_or_404(db: Session, ticket_id: int) -> PatientTicket:
 
 def est_hash_bcrypt(stored: Optional[str]) -> bool:
     return bool(stored) and stored.startswith("$2")
+
+
+def valider_mot_de_passe(mdp: str) -> str:
+    secret = (mdp or "").strip()
+    if len(secret) < 8 or len(secret) > 128:
+        raise HTTPException(
+            status_code=400,
+            detail="Le mot de passe doit contenir entre 8 et 128 caracteres.",
+        )
+    if not any(c.isalpha() for c in secret) or not any(c.isdigit() for c in secret):
+        raise HTTPException(
+            status_code=400,
+            detail="Le mot de passe doit contenir au moins une lettre et un chiffre.",
+        )
+    return secret
+
+
+def secret_depuis_body(body) -> Optional[str]:
+    if body is None:
+        return None
+    for name in ("password", "code_pin"):
+        val = getattr(body, name, None)
+        if val and str(val).strip():
+            return str(val).strip()
+    return None
+
+
+def slugifier(texte: str) -> str:
+    brut = (texte or "").strip().lower()
+    parties = []
+    for ch in brut:
+        if ch.isalnum():
+            parties.append(ch)
+        elif ch in " ._-":
+            parties.append("-")
+    slug = "".join(parties)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-") or "cabinet"
+
+
+def slug_unique(db: Session, base: str) -> str:
+    slug = slugifier(base)
+    if not db.query(Cabinet).filter(Cabinet.slug == slug).first():
+        return slug
+    n = 2
+    while db.query(Cabinet).filter(Cabinet.slug == f"{slug}-{n}").first():
+        n += 1
+        if n > 999:
+            raise HTTPException(status_code=400, detail="Impossible de creer un identifiant unique.")
+    return f"{slug}-{n}"
 
 
 def hash_pin(pin: str) -> str:
@@ -486,7 +528,6 @@ def authentifier_cabinet(
     request: Request,
     authorization: Optional[str] = None,
     code_pin: Optional[str] = None,
-    pin_query: Optional[str] = None,
 ) -> Cabinet:
     token = extraire_bearer(authorization)
     if token:
@@ -497,19 +538,17 @@ def authentifier_cabinet(
             raise HTTPException(status_code=403, detail="Non autorise.")
         return cabinet
 
-    # PIN en query : temporaire, compatibilite ancienne app bureau.
-    pin = code_pin or pin_query
-    if not pin:
+    if not code_pin:
         raise HTTPException(status_code=401, detail="Authentification requise.")
 
     ip = client_ip(request)
     verifier_limite_pin(slug, ip)
     cabinet = get_cabinet_or_404(db, slug)
-    if not pin_ok(pin, cabinet.code_pin):
+    if not pin_ok(code_pin, cabinet.code_pin):
         noter_echec_pin(slug, ip)
-        raise HTTPException(status_code=403, detail="Code PIN incorrect.")
+        raise HTTPException(status_code=403, detail="Mot de passe incorrect.")
     reset_echec_pin(slug, ip)
-    rehash_si_clair(db, cabinet, pin)
+    rehash_si_clair(db, cabinet, code_pin)
     return cabinet
 
 
@@ -519,7 +558,6 @@ def authentifier_pour_ticket(
     request: Request,
     authorization: Optional[str] = None,
     code_pin: Optional[str] = None,
-    pin_query: Optional[str] = None,
 ) -> Cabinet:
     token = extraire_bearer(authorization)
     if token:
@@ -530,7 +568,7 @@ def authentifier_pour_ticket(
             raise HTTPException(status_code=404, detail="Ticket introuvable.")
         return cabinet
     return authentifier_cabinet(
-        db, ticket.cabinet_slug, request, None, code_pin, pin_query
+        db, ticket.cabinet_slug, request, None, code_pin
     )
 
 
@@ -579,7 +617,7 @@ def extraire_suivi(request: Request, body=None) -> Optional[str]:
 
 def exiger_suivi_si_present(ticket: PatientTicket, request: Request, body=None) -> None:
     if not ticket.suivi_token_hash:
-        return
+        raise HTTPException(status_code=404, detail="Ticket introuvable.")
     tok = extraire_suivi(request, body)
     if not tok or hash_jeton(tok) != ticket.suivi_token_hash:
         raise HTTPException(status_code=404, detail="Ticket introuvable.")
@@ -670,7 +708,8 @@ class CabinetRegister(BaseModel):
     specialite: str
     telephone: str
     wilaya: str
-    code_pin: str
+    password: Optional[str] = None
+    code_pin: Optional[str] = None
 
 
 class TrialSignup(BaseModel):
@@ -685,10 +724,12 @@ class TrialSignup(BaseModel):
 
 
 class PinCheck(BaseModel):
-    code_pin: str
+    password: Optional[str] = None
+    code_pin: Optional[str] = None
 
 
 class PinCompat(BaseModel):
+    password: Optional[str] = None
     code_pin: Optional[str] = None
 
 
@@ -699,10 +740,12 @@ class PatientTicketCreate(BaseModel):
 
 
 class ManualTicketCreate(PatientTicketCreate):
+    password: Optional[str] = None
     code_pin: Optional[str] = None
 
 
 class TicketActionBody(BaseModel):
+    password: Optional[str] = None
     code_pin: Optional[str] = None
     reason_code: Optional[str] = None
     reason_note: Optional[str] = None
@@ -710,13 +753,13 @@ class TicketActionBody(BaseModel):
 
 
 class UrgentBody(BaseModel):
+    password: Optional[str] = None
     code_pin: Optional[str] = None
     urgent_reason: str
 
 
 class CloseDayBody(BaseModel):
     reason: Optional[str] = None
-    notify_patients: Optional[bool] = True
 
 
 class CabinetSettings(BaseModel):
@@ -765,15 +808,17 @@ def home():
 # A. INSCRIPTION D'UN NOUVEAU CABINET (formulaire complet, B2B)
 @app.post("/api/cabinets/register")
 def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
-    slug = data.nom_medecin.lower().replace(" ", "-").replace(".", "")
+    secret = valider_mot_de_passe(secret_depuis_body(data) or "")
     existing = db.query(Cabinet).filter(Cabinet.telephone == data.telephone).first()
     if existing:
         raise HTTPException(status_code=400, detail="Ce numero de telephone est deja enregistre.")
+    slug = slug_unique(db, data.nom_medecin)
 
     trial_end = datetime.utcnow() + timedelta(days=TRIAL_DAYS)
     cabinet = Cabinet(
         slug=slug, nom_medecin=data.nom_medecin, specialite=data.specialite,
-        telephone=data.telephone, wilaya=data.wilaya, code_pin=hash_pin(data.code_pin),
+        telephone=data.telephone, wilaya=data.wilaya, code_pin=hash_pin(secret),
+        subscription_type="trial_45d",
         subscription_end=trial_end,
     )
     db.add(cabinet)
@@ -790,10 +835,11 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
 # A2. INSCRIPTION ESSAI GRATUIT (popup du site vitrine)
 @app.post("/api/trial-signup")
 def trial_signup(data: TrialSignup, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    slug = data.cabinet.lower().replace(" ", "-").replace(".", "")
+    secret = valider_mot_de_passe(data.password)
     existing = db.query(Cabinet).filter(Cabinet.telephone == data.telephone).first()
     if existing:
         raise HTTPException(status_code=400, detail="Ce numero de telephone est deja enregistre.")
+    slug = slug_unique(db, data.cabinet)
 
     trial_end = datetime.utcnow() + timedelta(days=TRIAL_DAYS)
     cabinet = Cabinet(
@@ -802,7 +848,8 @@ def trial_signup(data: TrialSignup, background_tasks: BackgroundTasks, db: Sessi
         specialite=data.specialite,
         telephone=data.telephone,
         wilaya=data.wilaya,
-        code_pin=hash_pin(data.password[:6] if data.password else "0000"),
+        code_pin=hash_pin(secret),
+        subscription_type="trial_45d",
         subscription_end=trial_end,
     )
     db.add(cabinet)
@@ -993,7 +1040,20 @@ def track_ticket(ticket_id: int, request: Request, db: Session = Depends(get_db)
 
 # G. HISTORIQUE / EVENEMENTS D'UN TICKET
 @app.get("/api/tickets/{ticket_id}/events")
-def ticket_events(ticket_id: int, db: Session = Depends(get_db)):
+def ticket_events(
+    ticket_id: int,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    ticket = get_ticket_or_404(db, ticket_id)
+    token = extraire_bearer(authorization)
+    if token:
+        cab = cabinet_depuis_jeton(db, token)
+        if not cab or cab.slug != ticket.cabinet_slug:
+            raise HTTPException(status_code=404, detail="Ticket introuvable.")
+    else:
+        exiger_suivi_si_present(ticket, request)
     events = db.query(TicketEvent).filter(TicketEvent.ticket_id == ticket_id).order_by(TicketEvent.created_at.asc()).all()
     return [
         {
@@ -1011,12 +1071,11 @@ def ticket_events(ticket_id: int, db: Session = Depends(get_db)):
 def notify_ticket(
     ticket_id: int,
     request: Request,
-    pin: Optional[str] = None,
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
     ticket = get_ticket_or_404(db, ticket_id)
-    authentifier_pour_ticket(db, ticket, request, authorization, None, pin)
+    authentifier_pour_ticket(db, ticket, request, authorization)
     ticket.notification_count += 1
     db.commit()
     log_event(db, ticket.id, "notify")
@@ -1033,7 +1092,7 @@ def approve_urgent(
     db: Session = Depends(get_db),
 ):
     ticket = get_ticket_or_404(db, ticket_id)
-    authentifier_pour_ticket(db, ticket, request, authorization, body.code_pin)
+    authentifier_pour_ticket(db, ticket, request, authorization, secret_depuis_body(body))
     ticket.statut = "urgent"
     db.commit()
     log_event(db, ticket.id, "urgent_approved", body.urgent_reason)
@@ -1044,17 +1103,18 @@ def approve_urgent(
 # 7. ENDPOINTS CABINET (app desktop)
 # ============================================================
 
-# J. VERIFICATION DU CODE PIN (connexion desktop)
+# J. CONNEXION CABINET (mot de passe, route historique verify-pin)
 @app.post("/api/cabinets/{slug}/verify-pin")
 def verify_pin(slug: str, body: PinCheck, request: Request, db: Session = Depends(get_db)):
     ip = client_ip(request)
     verifier_limite_pin(slug, ip)
     cabinet = get_cabinet_or_404(db, slug)
-    if not pin_ok(body.code_pin, cabinet.code_pin):
+    secret = secret_depuis_body(body) or ""
+    if not pin_ok(secret, cabinet.code_pin):
         noter_echec_pin(slug, ip)
-        raise HTTPException(status_code=403, detail="Code PIN incorrect.")
+        raise HTTPException(status_code=403, detail="Mot de passe incorrect.")
     reset_echec_pin(slug, ip)
-    rehash_si_clair(db, cabinet, body.code_pin)
+    rehash_si_clair(db, cabinet, secret)
     token, expire = creer_session(db, cabinet)
     db.commit()
     return {
@@ -1088,15 +1148,21 @@ def add_manual_ticket(
     db: Session = Depends(get_db),
 ):
     cabinet = authentifier_cabinet(
-        db, data.cabinet_slug, request, authorization, data.code_pin
+        db, data.cabinet_slug, request, authorization, secret_depuis_body(data)
     )
     exiger_abonnement(cabinet)
+    if cabinet.day_closed:
+        raise HTTPException(status_code=400, detail="La journee est cloturee.")
+    if cabinet.max_tickets_per_day and cabinet.total_issued >= cabinet.max_tickets_per_day:
+        raise HTTPException(status_code=400, detail="Nombre maximum de tickets atteint pour aujourd'hui.")
+    brut = secrets.token_urlsafe(24)
     cabinet.total_issued += 1
     new_ticket = PatientTicket(
         cabinet_slug=cabinet.slug,
         ticket_num=cabinet.total_issued,
         nom_patient=None,
         telephone=None,
+        suivi_token_hash=hash_jeton(brut),
     )
     db.add(new_ticket)
     db.commit()
@@ -1114,11 +1180,10 @@ def add_manual_ticket(
 def cabinet_tickets(
     slug: str,
     request: Request,
-    pin: Optional[str] = None,
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    cabinet = authentifier_cabinet(db, slug, request, authorization, None, pin)
+    cabinet = authentifier_cabinet(db, slug, request, authorization)
     tickets = db.query(PatientTicket).filter(PatientTicket.cabinet_slug == cabinet.slug).order_by(PatientTicket.id.desc()).all()
     return [ticket_cabinet_dict(t) for t in tickets]
 
@@ -1133,7 +1198,7 @@ def cabinet_cancel_ticket(
     db: Session = Depends(get_db),
 ):
     ticket = get_ticket_or_404(db, ticket_id)
-    authentifier_pour_ticket(db, ticket, request, authorization, body.code_pin)
+    authentifier_pour_ticket(db, ticket, request, authorization, secret_depuis_body(body))
     ticket.statut = "cancelled"
     db.commit()
     log_event(db, ticket.id, "cabinet_cancel", body.reason_note)
@@ -1158,7 +1223,7 @@ def patient_ticket_action(
     ticket = get_ticket_or_404(db, ticket_id)
 
     if action in ACTIONS_CABINET:
-        authentifier_pour_ticket(db, ticket, request, authorization, body.code_pin)
+        authentifier_pour_ticket(db, ticket, request, authorization, secret_depuis_body(body))
     elif action in ACTIONS_PATIENT:
         exiger_suivi_si_present(ticket, request, body)
     else:
@@ -1199,7 +1264,7 @@ def start_day(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    cabinet = authentifier_cabinet(db, slug, request, authorization, body.code_pin)
+    cabinet = authentifier_cabinet(db, slug, request, authorization, secret_depuis_body(body))
     exiger_abonnement(cabinet)
     annuler_tickets_ouverts(db, cabinet.slug, "start_day_cancel")
     cabinet.day_closed = False
@@ -1215,12 +1280,11 @@ def start_day(
 def close_day(
     slug: str,
     request: Request,
-    body: CloseDayBody,
-    pin: Optional[str] = None,
+    body: CloseDayBody = CloseDayBody(),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    cabinet = authentifier_cabinet(db, slug, request, authorization, None, pin)
+    cabinet = authentifier_cabinet(db, slug, request, authorization)
 
     remaining = db.query(PatientTicket).filter(
         PatientTicket.cabinet_slug == cabinet.slug,
@@ -1242,11 +1306,10 @@ def update_settings(
     slug: str,
     request: Request,
     body: CabinetSettings,
-    pin: Optional[str] = None,
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
-    cabinet = authentifier_cabinet(db, slug, request, authorization, None, pin)
+    cabinet = authentifier_cabinet(db, slug, request, authorization)
 
     data = body.dict(exclude_unset=True)
     for key, value in data.items():
@@ -1288,7 +1351,7 @@ def get_queue_state(
         "cabinet_name": cabinet.nom_medecin,
         "specialite": cabinet.specialite,
         "serving_num": cabinet.serving_num,
-        "display_serving": f"N deg P-{cabinet.serving_num:02d}",
+        "display_serving": f"N° P-{cabinet.serving_num:02d}",
         "total_issued": cabinet.total_issued,
         "waiting_count": waiting,
         "is_active": cabinet.is_active,
@@ -1309,11 +1372,10 @@ def get_queue_state(
 def call_next(
     slug: str,
     request: Request,
-    pin: Optional[str] = None,
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
 ):
-    cabinet = authentifier_cabinet(db, slug, request, authorization, None, pin)
+    cabinet = authentifier_cabinet(db, slug, request, authorization)
     exiger_abonnement(cabinet)
 
     # Le patient actuellement en consultation est termine.
@@ -1372,7 +1434,7 @@ def call_next(
         "ticket_num": next_ticket.ticket_num,
         "nom_patient": pii_ram(next_ticket.id).get("nom_patient"),
         "statut": next_ticket.statut,
-        "display_serving": f"N deg P-{next_ticket.ticket_num:02d}"
+        "display_serving": f"N° P-{next_ticket.ticket_num:02d}"
     }
 
 
@@ -1429,6 +1491,13 @@ def admin_delete_cabinet(cabinet_id: int, db: Session = Depends(get_db), auth: b
     cabinet = db.query(Cabinet).filter(Cabinet.id == cabinet_id).first()
     if not cabinet:
         raise HTTPException(status_code=404, detail="Cabinet introuvable.")
+    slug = cabinet.slug
+    tickets = db.query(PatientTicket).filter(PatientTicket.cabinet_slug == slug).all()
+    ids = [t.id for t in tickets]
+    if ids:
+        db.query(TicketEvent).filter(TicketEvent.ticket_id.in_(ids)).delete(synchronize_session=False)
+    db.query(PatientTicket).filter(PatientTicket.cabinet_slug == slug).delete(synchronize_session=False)
+    db.query(CabinetSession).filter(CabinetSession.cabinet_slug == slug).delete(synchronize_session=False)
     db.delete(cabinet)
     db.commit()
     return {"status": "success", "message": "Cabinet supprime."}
@@ -1438,7 +1507,7 @@ def admin_delete_cabinet(cabinet_id: int, db: Session = Depends(get_db), auth: b
 def admin_stats(db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
     total_cabinets = db.query(Cabinet).count()
     actifs = db.query(Cabinet).filter(Cabinet.is_active == True).count()
-    en_essai = db.query(Cabinet).filter(Cabinet.subscription_type == "trial_14d").count()
+    en_essai = db.query(Cabinet).filter(Cabinet.subscription_type.in_(["trial_14d", "trial_45d"])).count()
     payants = db.query(Cabinet).filter(Cabinet.subscription_type.in_(["monthly", "annual"])).count()
     total_tickets = db.query(PatientTicket).count()
 
@@ -1463,7 +1532,7 @@ def admin_stats(db: Session = Depends(get_db), auth: bool = Depends(check_admin)
 
 @app.post("/api/admin/login")
 def admin_login(data: AdminLogin):
-    if data.password != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or data.password != ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Mot de passe incorrect.")
     return {"status": "success", "token": ADMIN_TOKEN}
 
