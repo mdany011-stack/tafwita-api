@@ -283,6 +283,9 @@ SESSION_HOURS = 12
 MAX_PIN_FAILURES = 5
 LOCK_MINUTES = 15
 MAX_SIGNUP_PER_HOUR = 3
+MAX_CONTACT_PER_HOUR = 5
+PRIX_MENSUEL_DA = 2500
+PRIX_ANNUEL_DA = 25000
 TZ_ALGERIE = timezone(timedelta(hours=1))
 STATUTS_OUVERTS = (
     "waiting", "returned", "suspended", "urgent_requested", "urgent", "serving",
@@ -294,6 +297,7 @@ STATUTS_APPELABLES = ("waiting", "returned", "urgent_requested")
 _pin_attempts = {}
 # Inscriptions : ip -> [horodatages]
 _signup_attempts = {}
+_contact_attempts = {}
 # Nom / telephone patients : jamais en SQL, seulement en RAM le temps du relais cabinet.
 _pii_ephemere = {}
 
@@ -502,6 +506,48 @@ def verifier_limite_inscription(ip: str) -> None:
 
 def noter_inscription(ip: str) -> None:
     _signup_attempts.setdefault(ip, []).append(datetime.utcnow())
+
+
+def verifier_limite_contact(ip: str) -> None:
+    maintenant = datetime.utcnow()
+    seuil = maintenant - timedelta(hours=1)
+    horaires = [t for t in _contact_attempts.get(ip, []) if t > seuil]
+    _contact_attempts[ip] = horaires
+    if len(horaires) >= MAX_CONTACT_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail="Trop de messages, reessayez plus tard.",
+        )
+
+
+def noter_contact(ip: str) -> None:
+    _contact_attempts.setdefault(ip, []).append(datetime.utcnow())
+
+
+def send_contact_email(nom: str, email: str, message: str) -> None:
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    if not (smtp_host and smtp_user and smtp_pass):
+        return
+    smtp_port = int(os.getenv("SMTP_PORT", "465"))
+    mail_from = os.getenv("MAIL_FROM", smtp_user)
+    inbox = os.getenv("CONTACT_EMAIL", "tafwitacontact@gmail.com")
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = "TAFWITA — message du site"
+        msg["From"] = mail_from
+        msg["To"] = inbox
+        msg["Reply-To"] = email
+        msg.set_content(
+            f"Nom : {nom}\nE-mail : {email}\n\n{message}\n"
+        )
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+    except Exception:
+        return
 
 
 def verifier_limite_pin(slug: str, ip: str) -> None:
@@ -819,6 +865,13 @@ class SupportCreate(BaseModel):
     message: str
 
 
+class ContactPublic(BaseModel):
+    nom: str
+    email: str
+    message: str
+    website: Optional[str] = None
+
+
 class SupportStatut(BaseModel):
     statut: str
 
@@ -907,6 +960,30 @@ def trial_signup(data: TrialSignup, request: Request, background_tasks: Backgrou
         "cabinet_slug": cabinet.slug,
         "console_url": cabinet_console_url(),
     }
+
+
+@app.post("/api/contact")
+def contact_public(data: ContactPublic, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    if (data.website or "").strip():
+        raise HTTPException(status_code=400, detail="Demande invalide.")
+    nom = (data.nom or "").strip()
+    email = (data.email or "").strip()
+    message = (data.message or "").strip()
+    if not nom or not email or not message or "@" not in email:
+        raise HTTPException(status_code=400, detail="Nom, e-mail et message sont obligatoires.")
+    ip = client_ip(request)
+    verifier_limite_contact(ip)
+    noter_contact(ip)
+    ticket = SupportTicket(
+        nom=nom,
+        email=email,
+        sujet="Contact vitrine",
+        message=message,
+    )
+    db.add(ticket)
+    db.commit()
+    background_tasks.add_task(send_contact_email, nom, email, message)
+    return {"status": "success", "message": "Message envoye."}
 
 
 # ============================================================
@@ -1550,11 +1627,9 @@ def admin_stats(db: Session = Depends(get_db), auth: bool = Depends(check_admin)
     payants = db.query(Cabinet).filter(Cabinet.subscription_type.in_(["monthly", "annual"])).count()
     total_tickets = db.query(PatientTicket).count()
 
-    PRIX_MENSUEL = 2500
-    PRIX_ANNUEL = 36000
     mensuels = db.query(Cabinet).filter(Cabinet.subscription_type == "monthly").count()
     annuels = db.query(Cabinet).filter(Cabinet.subscription_type == "annual").count()
-    ca_estime_mensuel = mensuels * PRIX_MENSUEL + (annuels * PRIX_ANNUEL) / 12
+    ca_estime_mensuel = mensuels * PRIX_MENSUEL_DA + (annuels * PRIX_ANNUEL_DA) / 12
 
     par_wilaya = {}
     for c in db.query(Cabinet).all():
@@ -1598,7 +1673,7 @@ def admin_list_patients(db: Session = Depends(get_db), auth: bool = Depends(chec
 
 @app.get("/api/admin/payments")
 def admin_list_payments(db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
-    prix = {"monthly": 2500, "annual": 36000}
+    prix = {"monthly": PRIX_MENSUEL_DA, "annual": PRIX_ANNUEL_DA}
     now = datetime.utcnow()
     rows = []
     for c in db.query(Cabinet).order_by(Cabinet.id.desc()).all():
