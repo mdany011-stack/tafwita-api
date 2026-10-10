@@ -316,7 +316,8 @@
               <li data-i="solCab4">Historique et horaires</li>
               <li data-i="solCab5">Affiche QR a imprimer</li>
             </ul>
-            <a href="./cabinet.html" class="btn btn-outline" style="margin-top:18px" data-i="solOpenConsole">Ouvrir dans le navigateur</a>
+            <a href="./mysetup.exe" class="btn btn-primary" style="margin-top:18px" download data-i="navDownload">Telecharger Windows (.exe)</a>
+            <a href="./cabinet.html" class="btn btn-outline" style="margin-top:10px" data-i="solOpenConsole">Ouvrir dans le navigateur</a>
           </article>
           <article class="solution" data-reveal>
             <div class="solution-icon">▢</div>
@@ -358,7 +359,7 @@
             <span class="ribbon" data-i="priceNow">Actuel</span>
             <h3 data-i="priceIndiv">Cabinet individuel</h3>
             <div class="price">2 500 <small data-i="priceMonth">DA / mois</small></div>
-            <p class="price-note" data-i="priceYear">36 000 DA / an. Contactez-nous pour activer.</p>
+            <p class="price-note" data-i="priceYear">25 000 DA / an (au lieu de 30 000). Contactez-nous pour activer.</p>
             <ul>
               <li data-i="solPat">Site patient</li>
               <li data-i="solPhone">Console telephone</li>
@@ -392,7 +393,7 @@
           </div>
           <div class="faq-item">
             <button class="faq-question" type="button"><span data-i="faq3q">Comment payer l'abonnement ?</span> <span class="faq-sign">+</span></button>
-            <div class="faq-answer"><p data-i="faq3a">Il n'y a pas encore de paiement automatique. Ecrivez a tafwitacontact@gmail.com pour l'essai ou l'abonnement (2500 DA / mois ou 36000 DA / an).</p></div>
+            <div class="faq-answer"><p data-i="faq3a">Il n'y a pas encore de paiement automatique. Ecrivez a tafwitacontact@gmail.com pour l'essai ou l'abonnement (2500 DA / mois ou 25000 DA / an).</p></div>
           </div>
           <div class="faq-item">
             <button class="faq-question" type="button"><span data-i="faq4q">La file est-elle mise a jour en direct ?</span> <span class="faq-sign">+</span></button>
@@ -415,7 +416,7 @@
         <div class="section-head" data-reveal>
           <span class="tag" data-i="navContact">Contact</span>
           <h2 data-i="contactTitle">Ecrire a TAFWITA</h2>
-          <p data-i="contactLead">Une question sur l essai, l abonnement ou le cabinet ? Envoyez un message. Votre application e-mail s ouvre avec le texte pret.</p>
+          <p data-i="contactLead">Une question sur l essai, l abonnement ou le cabinet ? Envoyez un message. Nous repondons par e-mail.</p>
         </div>
         <div class="contact-grid">
           <div data-reveal>
@@ -423,6 +424,10 @@
             <a href="mailto:tafwitacontact@gmail.com">tafwitacontact@gmail.com</a>
           </div>
           <form class="contact-card" id="contactForm" data-reveal>
+            <div class="hp-field" aria-hidden="true">
+              <label for="contactWebsite">Site web</label>
+              <input id="contactWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+            </div>
             <div class="trial-field" style="margin-bottom:14px">
               <label for="contactNom" data-i="contactName">Nom</label>
               <input id="contactNom" required>
@@ -466,6 +471,7 @@
         <a href="#tarifs" data-i="navPrice">Tarifs</a>
         <a href="./cabinet.html" data-i="navCabinet">Console cabinet</a>
         <a href="./patient.html" data-i="navPatient">App patient</a>
+        <a href="./mysetup.exe" download data-i="navDownload">Telecharger Windows (.exe)</a>
       </div>
       <div>
         <h4 data-i="footContact">Contact</h4>
@@ -621,7 +627,7 @@
   var I = {
     FR: {
       navHow: "Comment ca marche", navSol: "Solutions", navPrice: "Tarifs", navFaq: "FAQ", navContact: "Contact",
-      navPatient: "App patient", navCabinet: "Console cabinet", navTrial: "Essai gratuit",
+      navPatient: "App patient", navCabinet: "Console cabinet", navDownload: "Telecharger Windows (.exe)", navTrial: "Essai gratuit",
       eyebrow: "Pour les cabinets medicaux en Algerie",
       heroTitle: "La file d'attente medicale,", heroTitleEm: "simple et humaine.",
       heroText: "Les patients prennent un ticket a distance et suivent leur tour. Le cabinet gere la file sur telephone ou dans le navigateur sur ordinateur, y compris les tickets papier. La file peut s afficher sur une tele via HDMI.",
@@ -650,12 +656,12 @@
       priceLead: "Promotion de lancement : 45 jours d'essai pour les premiers cabinets. L'abonnement est ensuite active par TAFWITA.",
       price45: "DA / 45 jours", priceTrialNote: "Un cabinet, tickets illimites.", liPaper: "Tickets papier",
       startTrial: "Commencer l'essai", priceNow: "Actuel", priceIndiv: "Cabinet individuel",
-      priceMonth: "DA / mois", priceYear: "36 000 DA / an. Contactez-nous pour activer.", liHist: "Historique", liSupport: "Activation et suivi par TAFWITA", writeUs: "Ecrire a TAFWITA",
+      priceMonth: "DA / mois", priceYear: "25 000 DA / an (au lieu de 30 000). Contactez-nous pour activer.", liHist: "Historique", liSupport: "Activation et suivi par TAFWITA", writeUs: "Ecrire a TAFWITA",
       faqTag: "Questions",
       faq1q: "Le patient doit-il installer une application ?", faq1a: "Non. Il ouvre une page web sur son telephone. Il peut aussi l'ajouter a l'ecran d'accueil (PWA).",
       faq2q: "Comment gerer les patients sans smartphone ?", faq2a: "Le cabinet ajoute un ticket papier depuis la console telephone ou ordinateur. Il rejoint la meme file.",
       faq5q: "Et si le cabinet n'a pas d'ordinateur ?", faq5a: "La secretaire ouvre la console cabinet sur son telephone. Elle peut aussi l'ajouter a l'ecran d'accueil. L'affiche QR arrive par e-mail a l'inscription.",
-      faq3q: "Comment payer l'abonnement ?", faq3a: "Il n'y a pas encore de paiement automatique. Ecrivez a tafwitacontact@gmail.com pour l'essai ou l'abonnement (2500 DA / mois ou 36000 DA / an).",
+      faq3q: "Comment payer l'abonnement ?", faq3a: "Il n'y a pas encore de paiement automatique. Ecrivez a tafwitacontact@gmail.com pour l'essai ou l'abonnement (2500 DA / mois ou 25000 DA / an).",
       faq4q: "La file est-elle mise a jour en direct ?", faq4a: "Oui. Le site patient, la console telephone ou ordinateur, et l ecran TV lisent la meme file.",
       faq6q: "Comment afficher la file sur une tele ?", faq6a: "Branchez un ordinateur ou un telephone a la tele avec un cable HDMI. Ouvrez l ecran TV depuis la console, puis plein ecran. Une tele normale suffit. Seuls les numeros s affichent.",
       faq7q: "Peut-on installer la console cabinet sur un telephone ?", faq7a: "Oui. Ouvrez la console dans le navigateur du telephone, puis ajoutez-la a l ecran d accueil. C est une application web, sans magasin d applications.",
@@ -663,8 +669,9 @@
       ctaText: "Creez un cabinet d essai. Gerez la file sur telephone ou ordinateur. Un e-mail contient l affiche QR. L ecran TV s ouvre depuis la console.",
       footLead: "File d'attente pour cabinets medicaux en Algerie.", footProd: "Produit", footContact: "Contact",
       footLegal: "Informations", mentions: "Mentions legales", privacy: "Confidentialite",
-      contactTitle: "Ecrire a TAFWITA", contactLead: "Une question sur l essai, l abonnement ou le cabinet ? Envoyez un message. Votre application e-mail s ouvre avec le texte pret.",
-      contactHint: "Vous pouvez aussi ecrire directement a", contactName: "Nom", contactEmail: "E-mail", contactMsg: "Message", contactSend: "Envoyer", contactOk: "Votre application e-mail va s ouvrir.",
+      contactTitle: "Ecrire a TAFWITA", contactLead: "Une question sur l essai, l abonnement ou le cabinet ? Envoyez un message. Nous repondons par e-mail.",
+      contactHint: "Vous pouvez aussi ecrire directement a", contactName: "Nom", contactEmail: "E-mail", contactMsg: "Message", contactSend: "Envoyer", contactOk: "Message envoye. Nous vous repondrons par e-mail.",
+      contactErr: "Impossible d envoyer le message. Reessayez.",
       trialTitle: "Commencer l'essai gratuit",
       trialLead: "Promotion lancement : un cabinet est cree pour 45 jours. Le mot de passe ouvre la console.",
       lblNom: "Nom", lblPrenom: "Prenom", lblCab: "Nom du cabinet", lblTel: "Telephone", lblEmail: "E-mail",
@@ -682,7 +689,7 @@
     },
     EN: {
       navHow: "How it works", navSol: "Solutions", navPrice: "Pricing", navFaq: "FAQ", navContact: "Contact",
-      navPatient: "Patient app", navCabinet: "Clinic console", navTrial: "Free trial",
+      navPatient: "Patient app", navCabinet: "Clinic console", navDownload: "Download Windows (.exe)", navTrial: "Free trial",
       eyebrow: "For medical clinics in Algeria",
       heroTitle: "The medical waiting line,", heroTitleEm: "simple and human.",
       heroText: "Patients take a ticket remotely and follow their turn. The clinic manages the queue on a phone or in the browser on a computer, including paper tickets. The queue can be shown on a TV via HDMI.",
@@ -711,12 +718,12 @@
       priceLead: "Launch offer: 45-day trial for the first clinics. The subscription is then activated by TAFWITA.",
       price45: "DZD / 45 days", priceTrialNote: "One clinic, unlimited tickets.", liPaper: "Paper tickets",
       startTrial: "Start the trial", priceNow: "Current", priceIndiv: "Individual clinic",
-      priceMonth: "DZD / month", priceYear: "36,000 DZD / year. Contact us to activate.", liHist: "History", liSupport: "Activation and follow-up by TAFWITA", writeUs: "Write to TAFWITA",
+      priceMonth: "DZD / month", priceYear: "25,000 DZD / year (instead of 30,000). Contact us to activate.", liHist: "History", liSupport: "Activation and follow-up by TAFWITA", writeUs: "Write to TAFWITA",
       faqTag: "Questions",
       faq1q: "Does the patient need to install an app?", faq1a: "No. They open a web page on their phone. They can also add it to the home screen (PWA).",
       faq2q: "How do you handle patients without a smartphone?", faq2a: "The clinic adds a paper ticket from the phone or computer console. It joins the same queue.",
       faq5q: "What if the clinic has no computer?", faq5a: "The secretary opens the clinic console on a phone. She can also add it to the home screen. The QR poster is sent by email at signup.",
-      faq3q: "How do I pay the subscription?", faq3a: "There is no automatic payment yet. Write to tafwitacontact@gmail.com for the trial or subscription (2,500 DZD / month or 36,000 DZD / year).",
+      faq3q: "How do I pay the subscription?", faq3a: "There is no automatic payment yet. Write to tafwitacontact@gmail.com for the trial or subscription (2,500 DZD / month or 25,000 DZD / year).",
       faq4q: "Is the queue updated live?", faq4a: "Yes. The patient site, the phone or computer console, and the TV screen read the same queue.",
       faq6q: "How do I show the queue on a TV?", faq6a: "Plug a computer or phone into the TV with an HDMI cable. Open the TV screen from the console, then go fullscreen. A normal TV is enough. Only numbers are shown.",
       faq7q: "Can the clinic console be installed on a phone?", faq7a: "Yes. Open the console in the phone browser, then add it to the home screen. It is a web app, not a store download.",
@@ -724,8 +731,9 @@
       ctaText: "Create a trial clinic. Run the queue on a phone or computer. An email includes the QR poster. The TV screen opens from the console.",
       footLead: "Queue management for medical clinics in Algeria.", footProd: "Product", footContact: "Contact",
       footLegal: "Information", mentions: "Legal notice", privacy: "Privacy",
-      contactTitle: "Write to TAFWITA", contactLead: "A question about the trial, subscription or clinic? Send a message. Your email app opens with the text ready.",
-      contactHint: "You can also write directly to", contactName: "Name", contactEmail: "Email", contactMsg: "Message", contactSend: "Send", contactOk: "Your email app will open.",
+      contactTitle: "Write to TAFWITA", contactLead: "A question about the trial, subscription or clinic? Send a message. We reply by email.",
+      contactHint: "You can also write directly to", contactName: "Name", contactEmail: "Email", contactMsg: "Message", contactSend: "Send", contactOk: "Message sent. We will reply by email.",
+      contactErr: "Could not send the message. Try again.",
       trialTitle: "Start the free trial",
       trialLead: "Launch offer: a clinic is created for 45 days. The password opens the console.",
       lblNom: "Last name", lblPrenom: "First name", lblCab: "Clinic name", lblTel: "Phone", lblEmail: "Email",
@@ -743,7 +751,7 @@
     },
     AR: {
       navHow: "كيف يعمل", navSol: "الحلول", navPrice: "الأسعار", navFaq: "أسئلة", navContact: "اتصل بنا",
-      navPatient: "تطبيق المريض", navCabinet: "شاشة العيادة", navTrial: "تجربة مجانية",
+      navPatient: "تطبيق المريض", navCabinet: "شاشة العيادة", navDownload: "تحميل ويندوز (.exe)", navTrial: "تجربة مجانية",
       eyebrow: "للعيادات الطبية في الجزائر",
       heroTitle: "طابور الانتظار الطبي،", heroTitleEm: "بسيط وإنساني.",
       heroText: "يأخذ المرضى تذكرة عن بُعد ويتابعون دورهم. تدير العيادة الطابور على الهاتف أو في المتصفح على الحاسوب، بما في ذلك التذاكر الورقية. يمكن عرض الطابور على التلفاز عبر HDMI.",
@@ -772,12 +780,12 @@
       priceLead: "عرض الإطلاق: 45 يوماً تجريبياً للعيادات الأولى. يفعّل الاشتراك بعد ذلك من تافويتا.",
       price45: "دج / 45 يوماً", priceTrialNote: "عيادة واحدة، تذاكر غير محدودة.", liPaper: "تذاكر ورقية",
       startTrial: "ابدأ التجربة", priceNow: "الحالي", priceIndiv: "عيادة فردية",
-      priceMonth: "دج / شهر", priceYear: "36 000 دج / سنة. راسلونا للتفعيل.", liHist: "السجل", liSupport: "تفعيل ومتابعة من تافويتا", writeUs: "راسل تافويتا",
+      priceMonth: "دج / شهر", priceYear: "25 000 دج / سنة (بدل 30 000). راسلونا للتفعيل.", liHist: "السجل", liSupport: "تفعيل ومتابعة من تافويتا", writeUs: "راسل تافويتا",
       faqTag: "أسئلة",
       faq1q: "هل يجب على المريض تثبيت تطبيق؟", faq1a: "لا. يفتح صفحة ويب على هاتفه. يمكنه أيضاً إضافتها إلى الشاشة الرئيسية.",
       faq2q: "كيف ندير المرضى دون هاتف ذكي؟", faq2a: "تضيف العيادة تذكرة ورقية من شاشة الهاتف أو الحاسوب. تدخل نفس الطابور.",
       faq5q: "ماذا لو لم يكن للعيادة حاسوب؟", faq5a: "تفتح السكرتيرة شاشة العيادة على هاتفها. يمكنها أيضاً إضافتها إلى الشاشة الرئيسية. ملصق QR يصل بالبريد عند التسجيل.",
-      faq3q: "كيف أدفع الاشتراك؟", faq3a: "لا يوجد دفع آلي بعد. راسلوا tafwitacontact@gmail.com للتجربة أو الاشتراك (2500 دج / شهر أو 36000 دج / سنة).",
+      faq3q: "كيف أدفع الاشتراك؟", faq3a: "لا يوجد دفع آلي بعد. راسلوا tafwitacontact@gmail.com للتجربة أو الاشتراك (2500 دج / شهر أو 25000 دج / سنة).",
       faq4q: "هل يتحدّث الطابور مباشرة؟", faq4a: "نعم. موقع المريض وشاشة الهاتف أو الحاسوب وشاشة التلفاز يقرأون نفس الطابور.",
       faq6q: "كيف أعرض الطابور على التلفاز؟", faq6a: "اربط حاسوباً أو هاتفاً بالتلفاز بكابل HDMI. افتح شاشة التلفاز من الكونسول ثم ملء الشاشة. يكفي تلفاز عادي. تُعرض الأرقام فقط.",
       faq7q: "هل يمكن تثبيت شاشة العيادة على الهاتف؟", faq7a: "نعم. افتح الكونسول في متصفح الهاتف ثم أضفه إلى الشاشة الرئيسية. إنه تطبيق ويب، دون متجر تطبيقات.",
@@ -785,8 +793,9 @@
       ctaText: "أنشئ عيادة تجريبية. أدِر الطابور على الهاتف أو الحاسوب. يصل ملصق QR بالبريد. شاشة التلفاز تُفتح من الكونسول.",
       footLead: "طابور انتظار للعيادات الطبية في الجزائر.", footProd: "المنتج", footContact: "اتصل بنا",
       footLegal: "معلومات", mentions: "إشعارات قانونية", privacy: "الخصوصية",
-      contactTitle: "راسل تافويتا", contactLead: "سؤال عن التجربة أو الاشتراك أو العيادة؟ أرسل رسالة. يفتح تطبيق البريد بالنص جاهزاً.",
-      contactHint: "يمكنك أيضاً الكتابة مباشرة إلى", contactName: "الاسم", contactEmail: "البريد الإلكتروني", contactMsg: "الرسالة", contactSend: "إرسال", contactOk: "سيفتح تطبيق البريد.",
+      contactTitle: "راسل تافويتا", contactLead: "سؤال عن التجربة أو الاشتراك أو العيادة؟ أرسل رسالة. نرد بالبريد.",
+      contactHint: "يمكنك أيضاً الكتابة مباشرة إلى", contactName: "الاسم", contactEmail: "البريد الإلكتروني", contactMsg: "الرسالة", contactSend: "إرسال", contactOk: "تم إرسال الرسالة. سنرد بالبريد.",
+      contactErr: "تعذّر إرسال الرسالة. أعد المحاولة.",
       trialTitle: "ابدأ التجربة المجانية",
       trialLead: "عرض الإطلاق: تُنشأ عيادة لمدة 45 يوماً. كلمة المرور تفتح الشاشة.",
       lblNom: "اللقب", lblPrenom: "الاسم", lblCab: "اسم العيادة", lblTel: "الهاتف", lblEmail: "البريد الإلكتروني",
@@ -804,6 +813,11 @@
     }
   };
   function tr(k){ return (I[lang] && I[lang][k]) || (I.FR[k] || k); }
+  function apiBase(){
+    var host = location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') return 'http://127.0.0.1:8000';
+    return 'https://tafwita-api.onrender.com';
+  }
   function translate(){
     document.documentElement.lang = lang === 'AR' ? 'ar' : lang.toLowerCase();
     document.documentElement.dir = lang === 'AR' ? 'rtl' : 'ltr';
@@ -865,22 +879,39 @@
 
   var contactForm = document.getElementById('contactForm');
   if (contactForm) {
-    contactForm.addEventListener('submit', function(e){
+    contactForm.addEventListener('submit', async function(e){
       e.preventDefault();
       var nom = document.getElementById('contactNom').value.trim();
       var email = document.getElementById('contactEmail').value.trim();
       var message = document.getElementById('contactMessage').value.trim();
+      var website = document.getElementById('contactWebsite').value;
       var status = document.getElementById('contactStatus');
+      var btn = contactForm.querySelector('button[type="submit"]');
       if (!nom || !email || !message) {
         status.style.color = '#c05050';
         status.textContent = tr('errRequired');
         return;
       }
-      var sujet = encodeURIComponent('TAFWITA');
-      var corps = encodeURIComponent('Nom : ' + nom + '\nE-mail : ' + email + '\n\n' + message);
-      status.style.color = '#2e8b57';
-      status.textContent = tr('contactOk');
-      window.location.href = 'mailto:tafwitacontact@gmail.com?subject=' + sujet + '&body=' + corps;
+      btn.disabled = true;
+      try {
+        var r = await fetch(apiBase() + '/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nom: nom, email: email, message: message, website: website })
+        });
+        var d = await r.json().catch(function(){ return {}; });
+        var detail = d.detail;
+        if (Array.isArray(detail)) detail = (detail[0] && (detail[0].msg || detail[0].detail)) || tr('contactErr');
+        if (!r.ok) throw Error(detail || d.message || tr('contactErr'));
+        status.style.color = '#2e8b57';
+        status.textContent = tr('contactOk');
+        contactForm.reset();
+      } catch (err) {
+        status.style.color = '#c05050';
+        status.textContent = err.message || tr('contactErr');
+      } finally {
+        btn.disabled = false;
+      }
     });
   }
 
@@ -909,11 +940,7 @@
     p.website = document.getElementById('trialWebsite').value;
     submit.disabled = true;
     try {
-      var host = location.hostname;
-      var api = (host === 'localhost' || host === '127.0.0.1')
-        ? 'http://127.0.0.1:8000'
-        : 'https://tafwita-api.onrender.com';
-      var r = await fetch(api.replace(/\/$/, '') + '/api/trial-signup', {
+      var r = await fetch(apiBase() + '/api/trial-signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(p)
