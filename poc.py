@@ -21,6 +21,7 @@ from main import (
     Cabinet,
     PatientTicket,
     _pin_attempts,
+    _signup_attempts,
     est_hash_bcrypt,
 )
 
@@ -47,13 +48,15 @@ def check_true(label, cond):
 
 
 def register(nom, tel, password="Alpha1234"):
-    return client.post("/api/cabinets/register", json={
+    r = client.post("/api/cabinets/register", json={
         "nom_medecin": nom,
         "specialite": "Medecine generale",
         "telephone": tel,
         "wilaya": "Alger",
         "password": password,
     })
+    _signup_attempts.clear()
+    return r
 
 
 def login(slug, password):
@@ -375,6 +378,9 @@ cab.subscription_end = datetime.utcnow() + timedelta(days=14)
 db.commit()
 db.close()
 
+r = client.get("/tv.html")
+check("page TV publique", r.status_code, 200)
+
 r = client.get("/patient.html")
 check("page patient publique", r.status_code, 200)
 r = client.get("/p/dr-alpha")
@@ -433,6 +439,61 @@ r = client.post("/api/cabinets/logout", headers=auth(token_a))
 check("logout", r.status_code, 200)
 r = client.post("/api/queue/dr-alpha/next", headers=auth(token_a))
 check("next apres logout", r.status_code, 401)
+
+# --- Inscription essai : honeypot et limite IP ---
+def essai_corps(tel, website="", cabinet=None):
+    return {
+        "nom": "Essai",
+        "prenom": "Test",
+        "cabinet": cabinet or ("Cabinet " + tel),
+        "telephone": tel,
+        "email": "essai@example.com",
+        "specialite": "Medecine generale",
+        "wilaya": "Alger",
+        "password": "Essai1234",
+        "website": website,
+    }
+
+_signup_attempts.clear()
+r = client.post("/api/trial-signup", json=essai_corps("0555111000", "http://spam.test"))
+check("essai honeypot refuse", r.status_code, 400)
+db = SessionLocal()
+try:
+    honeypot_cree = db.query(Cabinet).filter(Cabinet.telephone == "0555111000").first()
+finally:
+    db.close()
+check("essai honeypot sans cabinet", honeypot_cree, None)
+
+_signup_attempts.clear()
+for i in range(3):
+    r = client.post("/api/trial-signup", json=essai_corps("055511101%d" % i))
+    check("essai %d accepte" % (i + 1), r.status_code, 200)
+r = client.post("/api/trial-signup", json=essai_corps("0555111019"))
+check("essai 4e refuse limite", r.status_code, 429)
+
+_signup_attempts.clear()
+for i in range(3):
+    r = client.post("/api/cabinets/register", json={
+        "nom_medecin": "Dr Limite %d" % i,
+        "specialite": "Medecine generale",
+        "telephone": "055511102%d" % i,
+        "wilaya": "Alger",
+        "password": "Limite123",
+    })
+    check("register limite %d accepte" % (i + 1), r.status_code, 200)
+r = client.post("/api/cabinets/register", json={
+    "nom_medecin": "Dr Limite 9",
+    "specialite": "Medecine generale",
+    "telephone": "0555111029",
+    "wilaya": "Alger",
+    "password": "Limite123",
+})
+check("register 4e refuse limite", r.status_code, 429)
+
+r = client.get("/mentions.html")
+check("page mentions", r.status_code, 200)
+r = client.get("/confidentialite.html")
+check("page confidentialite", r.status_code, 200)
 
 print(f"\n=== Resultat : {passed} ok, {failed} echec ===")
 if os.path.exists(POC_DB):
