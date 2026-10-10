@@ -37,6 +37,11 @@ def cabinet_console_url() -> str:
     return f"{_pages_base()}/cabinet.html"
 
 
+def tv_screen_url(slug: str) -> str:
+    from urllib.parse import quote
+    return f"{_pages_base()}/tv.html?cabinet={quote(slug, safe='')}"
+
+
 def make_affiche_png(nom: str, specialite: str, url: str) -> bytes:
     import qrcode
     from PIL import Image, ImageDraw, ImageFont
@@ -277,6 +282,7 @@ TRIAL_DAYS = 45
 SESSION_HOURS = 12
 MAX_PIN_FAILURES = 5
 LOCK_MINUTES = 15
+MAX_SIGNUP_PER_HOUR = 3
 TZ_ALGERIE = timezone(timedelta(hours=1))
 STATUTS_OUVERTS = (
     "waiting", "returned", "suspended", "urgent_requested", "urgent", "serving",
@@ -286,6 +292,8 @@ STATUTS_AVANT_VOUS = ("waiting", "returned", "urgent_requested", "urgent")
 STATUTS_APPELABLES = ("waiting", "returned", "urgent_requested")
 # Compteur memoire : (slug, ip) -> {fails, locked_until}
 _pin_attempts = {}
+# Inscriptions : ip -> [horodatages]
+_signup_attempts = {}
 # Nom / telephone patients : jamais en SQL, seulement en RAM le temps du relais cabinet.
 _pii_ephemere = {}
 
@@ -315,7 +323,10 @@ _DIR_CODE = os.path.dirname(os.path.abspath(__file__))
 _PAGES_PUBLIQUES = {
     "patient.html": "text/html; charset=utf-8",
     "cabinet.html": "text/html; charset=utf-8",
+    "tv.html": "text/html; charset=utf-8",
     "admin.html": "text/html; charset=utf-8",
+    "mentions.html": "text/html; charset=utf-8",
+    "confidentialite.html": "text/html; charset=utf-8",
     "service-worker.js": "application/javascript; charset=utf-8",
     "manifest.webmanifest": "application/manifest+json",
     "manifest-cabinet.webmanifest": "application/manifest+json",
@@ -335,7 +346,10 @@ def servir_page_publique(nom: str):
 
 @app.get("/patient.html")
 @app.get("/cabinet.html")
+@app.get("/tv.html")
 @app.get("/admin.html")
+@app.get("/mentions.html")
+@app.get("/confidentialite.html")
 @app.get("/service-worker.js")
 @app.get("/manifest.webmanifest")
 @app.get("/manifest-cabinet.webmanifest")
@@ -472,6 +486,22 @@ def client_ip(request: Request) -> str:
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "inconnu"
+
+
+def verifier_limite_inscription(ip: str) -> None:
+    maintenant = datetime.utcnow()
+    seuil = maintenant - timedelta(hours=1)
+    horaires = [t for t in _signup_attempts.get(ip, []) if t > seuil]
+    _signup_attempts[ip] = horaires
+    if len(horaires) >= MAX_SIGNUP_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail="Trop de demandes, reessayez plus tard.",
+        )
+
+
+def noter_inscription(ip: str) -> None:
+    _signup_attempts.setdefault(ip, []).append(datetime.utcnow())
 
 
 def verifier_limite_pin(slug: str, ip: str) -> None:
@@ -721,6 +751,7 @@ class TrialSignup(BaseModel):
     specialite: str
     wilaya: str
     password: str
+    website: Optional[str] = None
 
 
 class PinCheck(BaseModel):
@@ -807,7 +838,10 @@ def home():
 
 # A. INSCRIPTION D'UN NOUVEAU CABINET (formulaire complet, B2B)
 @app.post("/api/cabinets/register")
-def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
+def register_cabinet(data: CabinetRegister, request: Request, db: Session = Depends(get_db)):
+    ip = client_ip(request)
+    verifier_limite_inscription(ip)
+    noter_inscription(ip)
     secret = valider_mot_de_passe(secret_depuis_body(data) or "")
     existing = db.query(Cabinet).filter(Cabinet.telephone == data.telephone).first()
     if existing:
@@ -834,7 +868,12 @@ def register_cabinet(data: CabinetRegister, db: Session = Depends(get_db)):
 
 # A2. INSCRIPTION ESSAI GRATUIT (popup du site vitrine)
 @app.post("/api/trial-signup")
-def trial_signup(data: TrialSignup, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def trial_signup(data: TrialSignup, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    if (data.website or "").strip():
+        raise HTTPException(status_code=400, detail="Demande invalide.")
+    ip = client_ip(request)
+    verifier_limite_inscription(ip)
+    noter_inscription(ip)
     secret = valider_mot_de_passe(data.password)
     existing = db.query(Cabinet).filter(Cabinet.telephone == data.telephone).first()
     if existing:
