@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f9f8">
+  <meta name="description" content="TAFWITA modernise la file d'attente des cabinets medicaux en Algerie.">
+  <title>TAFWITA - La file d'attente medicale, simplement</title>
+<style>
+    :root {
+      --bg: #f4f9f8;
+      --bg-soft: #edf7f5;
+      --surface: #ffffff;
+      --surface-mint: #f1fbf8;
+      --border: #dcefeb;
+      --border-strong: #bfeee3;
+      --turquoise: #16b6b0;
+      --turquoise-dark: #128f8a;
+      --turquoise-light: #8ee5d4;
+      --turquoise-pale: #dff7f1;
+      --text: #24343d;
+      --text-soft: #50646b;
+      --text-muted: #91a4a8;
+      --shadow: 0 14px 38px rgba(45, 121, 115, .10);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --ff: "Segoe UI", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; overflow-x: hidden; font-family: var(--ff); color: var(--text); background: var(--bg); }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    .container { width: min(1150px, calc(100% - 40px)); margin: 0 auto; position: relative; z-index: 2; }
+
+    .waves { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; opacity: .18; }
+    .wave { position: absolute; left: -25vw; width: 150vw; height: 330px; border: 1.5px solid rgba(22,182,176,.45); border-radius: 50%; transform: rotate(-14deg); animation: waveMove 16s ease-in-out infinite alternate; }
+    .wave:nth-child(1) { top: -180px; }
+    .wave:nth-child(2) { top: 360px; border-color: rgba(142,229,212,.55); animation-duration: 22s; animation-direction: alternate-reverse; }
+    .wave:nth-child(3) { bottom: -190px; border-color: rgba(22,182,176,.28); animation-duration: 19s; }
+    @keyframes waveMove { from { transform: translateX(-8%) rotate(-14deg) scale(1); } to { transform: translateX(7%) rotate(7deg) scale(1.08); } }
+
+    .navbar { position: sticky; top: 0; z-index: 50; padding: 15px 0; background: rgba(244,249,248,.83); border-bottom: 1px solid transparent; backdrop-filter: blur(15px); transition: .25s; }
+    .navbar.scrolled { border-bottom-color: var(--border); box-shadow: 0 5px 20px rgba(45,121,115,.05); }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+    .logo { font-size: 22px; font-weight: 850; letter-spacing: .8px; color: var(--text); }
+    .logo span { color: var(--turquoise); }
+    .nav-links { display: flex; align-items: center; gap: 26px; color: var(--text-soft); font-size: 14px; }
+    .nav-links a:hover { color: var(--turquoise-dark); }
+    .nav-actions { display: flex; align-items: center; gap: 10px; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 43px; padding: 0 19px; border: 1px solid transparent; border-radius: 99px; font-size: 13px; font-weight: 750; cursor: pointer; transition: transform .2s, box-shadow .2s, background .2s; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-primary { color: white; background: linear-gradient(90deg, var(--turquoise), #43cdb7); box-shadow: 0 9px 20px rgba(22,182,176,.24); }
+    .btn-primary:hover { box-shadow: 0 12px 26px rgba(22,182,176,.34); }
+    .btn-outline { color: var(--turquoise-dark); background: var(--surface); border-color: var(--border-strong); }
+    .btn-outline:hover { background: var(--turquoise-pale); }
+    .burger { display: none; border: 1px solid var(--border); width: 42px; height: 42px; color: var(--text); background: var(--surface); border-radius: 12px; cursor: pointer; font-size: 20px; }
+    .lang-btn { min-width: 42px; height: 42px; padding: 0 10px; border: 1px solid var(--border); border-radius: 12px; background: #fff; color: var(--turquoise-dark); font-weight: 800; cursor: pointer; }
+    html[dir="rtl"] { text-align: right; }
+    html[dir="rtl"] body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
+    html[dir="rtl"] .solution li, html[dir="rtl"] .price-card li { padding-left: 0; padding-right: 20px; }
+    html[dir="rtl"] .solution li::before, html[dir="rtl"] .price-card li::before { left: auto; right: 0; }
+    html[dir="rtl"] .ribbon { right: auto; left: 17px; }
+    html[dir="rtl"] .faq-question { text-align: right; }
+    html[dir="rtl"] .float-card.left { left: auto; right: 0; }
+    html[dir="rtl"] .float-card.right { right: auto; left: -12px; }
+    html[dir="rtl"] .trial-close { right: auto; left: 14px; }
+
+    .hero { padding: 93px 0 70px; background: radial-gradient(circle at 85% 15%, rgba(142,229,212,.29), transparent 28rem), linear-gradient(145deg, var(--bg-soft), var(--bg)); }
+    .hero-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 58px; align-items: center; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 19px; border: 1px solid var(--border-strong); border-radius: 99px; padding: 8px 13px; color: var(--turquoise-dark); background: var(--surface); font-size: 12px; font-weight: 700; }
+    .hero h1 { margin: 0 0 20px; max-width: 650px; font-size: clamp(38px, 5vw, 61px); line-height: 1.07; letter-spacing: -2px; }
+    .hero h1 span { color: var(--turquoise); }
+    .hero-text { max-width: 590px; margin: 0 0 29px; color: var(--text-soft); font-size: 17px; line-height: 1.65; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-large { min-height: 51px; padding: 0 24px; font-size: 14px; }
+    .hero-proof { display: flex; flex-wrap: wrap; gap: 22px; margin-top: 34px; }
+    .proof { display: flex; flex-direction: column; }
+    .proof strong { color: var(--text); font-size: 18px; }
+    .proof span { color: var(--text-muted); font-size: 12px; margin-top: 3px; }
+
+    .phone-zone { min-height: 478px; display: grid; place-items: center; position: relative; }
+    .phone { width: 264px; min-height: 470px; padding: 13px; border: 8px solid #eaf5f3; border-radius: 39px; background: #ffffff; box-shadow: 0 30px 60px rgba(35,99,99,.22); transform: rotate(4deg); animation: phoneFloat 6s ease-in-out infinite; }
+    @keyframes phoneFloat { 0%,100% { transform: translateY(0) rotate(4deg); } 50% { transform: translateY(-13px) rotate(3deg); } }
+    .phone-notch { width: 78px; height: 14px; margin: 0 auto 13px; border-radius: 99px; background: #24343d; }
+    .phone-app { min-height: 405px; padding: 14px; border-radius: 23px; background: linear-gradient(160deg,#effaf8,#f8fdfc); }
+    .phone-brand { color: #263740; font-size: 13px; font-weight: 850; letter-spacing: .4px; }
+    .phone-brand span { color: var(--turquoise); }
+    .phone-welcome { margin: 20px 0 10px; color: var(--text); font-size: 17px; font-weight: 800; }
+    .phone-doctor { padding: 15px; border-radius: 16px; color: white; background: linear-gradient(135deg,#16b6b0,#43cdb7); }
+    .phone-doctor small { display: block; opacity: .82; font-size: 10px; }
+    .phone-doctor strong { display: block; margin-top: 3px; font-size: 15px; }
+    .phone-pill { display: inline-block; margin-top: 11px; padding: 5px 8px; border-radius: 99px; background: rgba(255,255,255,.23); font-size: 9px; }
+    .phone-row-title { margin: 23px 0 10px; color: var(--text); font-size: 12px; font-weight: 800; }
+    .phone-mini-card { display: flex; align-items: center; gap: 9px; padding: 9px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 12px; background: white; }
+    .phone-avatar { display: grid; place-items: center; width: 29px; height: 29px; border-radius: 9px; color: var(--turquoise-dark); background: var(--turquoise-pale); font-size: 10px; font-weight: 800; }
+    .phone-mini-card b { display: block; color: var(--text); font-size: 10px; }
+    .phone-mini-card span { color: var(--text-muted); font-size: 8px; }
+    .float-card { position: absolute; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 15px; background: rgba(255,255,255,.94); box-shadow: var(--shadow); animation: cardFloat 5s ease-in-out infinite; }
+    .float-card.left { left: 0; top: 75px; }
+    .float-card.right { right: -12px; bottom: 80px; animation-delay: 1.1s; }
+    @keyframes cardFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+    .float-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; color: var(--turquoise-dark); background: var(--turquoise-pale); }
+    .float-card b { display: block; color: var(--text); font-size: 11px; }
+    .float-card span { display: block; margin-top: 2px; color: var(--text-muted); font-size: 9px; }
+
+    .section { padding: 90px 0; }
+    .section-soft { background: var(--surface-mint); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .section-head { max-width: 690px; margin: 0 auto 43px; text-align: center; }
+    .tag { display: inline-block; margin-bottom: 13px; padding: 7px 12px; color: var(--turquoise-dark); background: var(--turquoise-pale); border-radius: 99px; font-size: 12px; font-weight: 750; }
+    .section-head h2 { margin: 0 0 13px; font-size: clamp(28px,4vw,40px); line-height: 1.17; letter-spacing: -.9px; }
+    .section-head p { margin: 0; color: var(--text-muted); font-size: 15px; line-height: 1.6; }
+
+    .steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 18px; }
+    .step { padding: 28px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 8px 18px rgba(45,121,115,.05); }
+    .step-number { color: var(--turquoise); font-size: 32px; font-weight: 850; }
+    .step h3 { margin: 16px 0 9px; font-size: 18px; }
+    .step p { margin: 0; color: var(--text-soft); font-size: 14px; line-height: 1.6; }
+
+    .solution-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 18px; }
+    .pricing { display: grid; grid-template-columns: repeat(2,1fr); gap: 18px; }
+    .solution, .price-card { position: relative; padding: 29px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); box-shadow: 0 8px 18px rgba(45,121,115,.05); }
+    .solution.featured, .price-card.featured { border-color: var(--turquoise-light); background: linear-gradient(145deg, #ffffff, #edfaf7); }
+    .solution-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; color: var(--turquoise-dark); background: var(--turquoise-pale); font-size: 22px; }
+    .solution h3, .price-card h3 { margin: 18px 0 13px; font-size: 19px; }
+    .solution ul, .price-card ul { padding: 0; margin: 0; list-style: none; }
+    .solution li, .price-card li { position: relative; margin: 9px 0; padding-left: 20px; color: var(--text-soft); font-size: 13px; line-height: 1.4; }
+    .solution li::before, .price-card li::before { content: "✓"; position: absolute; left: 0; color: var(--turquoise); font-weight: 900; }
+    .ribbon { position: absolute; top: 17px; right: 17px; padding: 6px 10px; color: #fff; background: var(--turquoise); border-radius: 99px; font-size: 10px; font-weight: 750; }
+    .price-card { display: flex; flex-direction: column; }
+    .price-card h3 { margin: 0 0 15px; }
+    .price { margin-bottom: 5px; font-size: 36px; font-weight: 850; letter-spacing: -1px; }
+    .price small { color: var(--text-muted); font-size: 13px; font-weight: 500; }
+    .price-note { min-height: 24px; color: var(--text-muted); font-size: 12px; }
+    .price-card ul { flex: 1; margin: 19px 0 26px; }
+
+    .faq { max-width: 780px; margin: 0 auto; display: grid; gap: 10px; }
+    .faq-item { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: white; }
+    .faq-question { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 18px 20px; border: 0; color: var(--text); background: white; text-align: left; font-weight: 750; cursor: pointer; }
+    .faq-sign { color: var(--turquoise); font-size: 24px; font-weight: 400; }
+    .faq-answer { max-height: 0; overflow: hidden; transition: max-height .28s ease; }
+    .faq-answer p { padding: 0 20px 18px; margin: 0; color: var(--text-soft); font-size: 13px; line-height: 1.6; }
+    .faq-item.open .faq-answer { max-height: 400px; }
+
+    .cta { padding: 100px 0; }
+    .cta-box { padding: 62px 32px; border: 1px solid var(--border-strong); border-radius: var(--radius-xl); text-align: center; background: linear-gradient(135deg,#e7faf4,#ffffff); box-shadow: var(--shadow); }
+    .cta-box h2 { margin: 0 0 12px; font-size: clamp(28px,4vw,40px); }
+    .cta-box p { max-width: 600px; margin: 0 auto 27px; color: var(--text-soft); line-height: 1.6; }
+
+    footer { padding: 56px 0 28px; background: #eaf5f2; border-top: 1px solid var(--border); }
+    .contact-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 28px; align-items: start; }
+    .contact-card { padding: 28px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+    .contact-card textarea { width: 100%; min-height: 120px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px; font: inherit; resize: vertical; }
+    .contact-status { min-height: 22px; margin-top: 12px; font-size: 13px; }
+    .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 30px; }
+    .footer-grid p { max-width: 280px; margin: 12px 0 0; color: var(--text-muted); font-size: 13px; line-height: 1.55; }
+    .footer-grid h4 { margin: 4px 0 12px; font-size: 13px; }
+    .footer-grid a { display: block; margin: 8px 0; color: var(--text-muted); font-size: 13px; }
+    .footer-grid a:hover { color: var(--turquoise-dark); }
+    .copyright { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-muted); text-align: center; font-size: 12px; }
+
+    .trial-modal { display: none; position: fixed; inset: 0; z-index: 80; place-items: center; padding: 18px; }
+    .trial-modal.open { display: grid; }
+    .trial-backdrop { position: absolute; inset: 0; background: rgba(18,32,40,.58); }
+    .trial-dialog { position: relative; z-index: 1; width: min(760px,100%); max-height: 92vh; overflow: auto; background: #fff; border: 1px solid #dcefeb; border-radius: 24px; box-shadow: 0 30px 70px rgba(16,48,58,.22); padding: 26px; }
+    .trial-close { position: absolute; top: 14px; right: 14px; width: 42px; height: 42px; border-radius: 99px; border: 1px solid #dcefeb; background: #fff; cursor: pointer; }
+    .trial-header h2 { margin: 0 0 8px; font-size: 28px; }
+    .trial-header p { margin: 0 0 16px; color: #50646b; font-size: 14px; }
+    .trial-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+    .trial-field label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: #50646b; }
+    .trial-field input, .trial-field select { width: 100%; min-height: 46px; padding: 0 14px; border: 1px solid #dcefeb; border-radius: 14px; font-size: 14px; outline: none; background: #fff; }
+    .trial-note { margin-top: 14px; padding: 12px 14px; border: 1px solid #bfeee3; background: #f1fbf8; border-radius: 14px; font-size: 13px; color: #50646b; }
+    .trial-message { min-height: 22px; margin-top: 12px; font-size: 13px; }
+    .trial-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+
+    [data-reveal] { opacity: 0; transform: translateY(20px); transition: .65s ease; }
+    [data-reveal].visible { opacity: 1; transform: none; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      [data-reveal] { opacity: 1; transform: none; }
+    }
+    @media(max-width: 1100px) {
+      .steps { grid-template-columns: repeat(2,1fr); }
+    }
+    @media(max-width: 860px) {
+      .nav-links { display: none; }
+      .burger { display: block; }
+      .nav-links.open { position: absolute; top: 68px; left: 20px; right: 20px; display: flex; flex-direction: column; gap: 0; padding: 10px; border: 1px solid var(--border); border-radius: 16px; background: white; box-shadow: var(--shadow); }
+      .nav-links.open a { padding: 12px; }
+      .hero-grid, .steps, .solution-grid, .pricing, .footer-grid, .contact-grid { grid-template-columns: 1fr; }
+      .hero-copy, .hero-actions, .hero-proof { text-align: center; justify-content: center; }
+    }
+    @media(max-width: 700px) { .trial-grid { grid-template-columns: 1fr; } }
+    @media(max-width: 520px) {
+      .container { width: min(100% - 28px, 1150px); }
+      .hero h1 { font-size: 39px; }
+      .section, .cta { padding: 65px 0; }
+      .float-card span { display: none; }
+    }
+</style>
+</head>
+<body>
+  <div class="waves"><div class="wave"></div><div class="wave"></div><div class="wave"></div></div>
+
+  <header class="navbar" id="navbar">
+    <div class="container nav-inner">
+      <a href="#accueil" class="logo">TAF<span>WITA</span></a>
+      <nav class="nav-links" id="navLinks">
+        <a href="#fonctionnement" data-i="navHow">Comment ca marche</a>
+        <a href="#solutions" data-i="navSol">Solutions</a>
+        <a href="#tarifs" data-i="navPrice">Tarifs</a>
+        <a href="#faq" data-i="navFaq">FAQ</a>
+        <a href="#contact" data-i="navContact">Contact</a>
+      </nav>
+      <div class="nav-actions">
+        <button type="button" class="lang-btn" id="language" aria-label="Langue">FR</button>
+        <a href="./cabinet.html" class="btn btn-outline" data-i="navCabinet">Console cabinet</a>
+        <a href="./patient.html" class="btn btn-outline" data-i="navPatient">App patient</a>
+        <a href="#tarifs" class="btn btn-primary js-trial-open" data-i="navTrial">Essai gratuit</a>
+      </div>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" id="accueil">
+      <div class="container hero-grid">
+        <div class="hero-copy" data-reveal>
+          <span class="eyebrow" data-i="eyebrow">Pour les cabinets medicaux en Algerie</span>
+          <h1><span data-i="heroTitle">La file d'attente medicale,</span> <span data-i="heroTitleEm">simple et humaine.</span></h1>
+          <p class="hero-text" data-i="heroText">Les patients prennent un ticket a distance et suivent leur tour. Le cabinet gere la file sur telephone ou dans le navigateur sur ordinateur, y compris les tickets papier. La file peut s afficher sur une tele via HDMI.</p>
+          <div class="hero-actions">
+            <a href="#tarifs" class="btn btn-primary btn-large js-trial-open" data-i="heroCta">Essayer 45 jours</a>
+            <a href="#fonctionnement" class="btn btn-outline btn-large" data-i="heroHow">Voir comment ca marche</a>
+          </div>
+          <div class="hero-proof">
+            <div class="proof"><strong data-i="proof1">4 acces</strong><span data-i="proof1s">Patient, telephone, ordinateur, TV</span></div>
+            <div class="proof"><strong data-i="proof2">45 jours</strong><span data-i="proof2s">Promotion lancement</span></div>
+          </div>
+        </div>
+        <div class="phone-zone" data-reveal>
+          <div class="float-card left"><div class="float-icon">✓</div><div><b data-i="floatOk">Ticket confirme</b><span data-i="floatOkS">Suivi en direct</span></div></div>
+          <div class="phone">
+            <div class="phone-notch"></div>
+            <div class="phone-app">
+              <div class="phone-brand">TAF<span>WITA</span></div>
+              <div class="phone-welcome" data-i="phoneHi">Bonjour</div>
+              <div class="phone-doctor"><small data-i="phoneCab">Votre cabinet</small><strong data-i="phoneLive">File en direct</strong><span class="phone-pill" data-i="phonePill">Suivi du numero</span></div>
+              <div class="phone-row-title" data-i="phoneTicket">Votre ticket</div>
+              <div class="phone-mini-card"><div class="phone-avatar">P</div><div><b>Ticket P-08</b><span data-i="phoneUpd">Mise a jour automatique</span></div></div>
+              <div class="phone-mini-card"><div class="phone-avatar">●</div><div><b data-i="phoneAlert">Alerte sonore</b><span data-i="phoneTurn">Quand c'est votre tour</span></div></div>
+            </div>
+          </div>
+          <div class="float-card right"><div class="float-icon">⌁</div><div><b data-i="floatApp">App cabinet</b><span data-i="floatAppS">File mise a jour</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="fonctionnement">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <span class="tag" data-i="howTag">Comment ca marche</span>
+          <h2 data-i="howTitle">Du telephone du patient a la console du cabinet</h2>
+          <p data-i="howLead">Une seule file : tickets a distance et tickets papier.</p>
+        </div>
+        <div class="steps">
+          <article class="step" data-reveal><div class="step-number">01</div><h3 data-i="how1t">Le patient choisit un cabinet</h3><p data-i="how1p">Recherche par nom, specialite ou wilaya, puis consultation des horaires.</p></article>
+          <article class="step" data-reveal><div class="step-number">02</div><h3 data-i="how2t">Il prend son ticket</h3><p data-i="how2p">Le ticket entre dans la file. Un QR code au cabinet ouvre la meme page.</p></article>
+          <article class="step" data-reveal><div class="step-number">03</div><h3 data-i="how3t">Il est averti</h3><p data-i="how3p">Suivi en direct et alerte sonore quand le cabinet l'appelle.</p></article>
+          <article class="step" data-reveal><div class="step-number">04</div><h3 data-i="how4t">Le cabinet appelle</h3><p data-i="how4p">Depuis le telephone ou l ordinateur. La file peut s afficher sur une tele HDMI, numeros seulement.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-soft" id="solutions">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <span class="tag" data-i="solTag">Ce qui existe aujourd'hui</span>
+          <h2 data-i="solTitle">Une file, quatre acces</h2>
+        </div>
+        <div class="solution-grid">
+          <article class="solution" data-reveal>
+            <div class="solution-icon">⌕</div>
+            <h3 data-i="solPat">Site patient</h3>
+            <ul>
+              <li data-i="solPat1">Recherche de cabinets</li>
+              <li data-i="solPat2">Favoris</li>
+              <li data-i="solPat3">Prise de ticket a distance</li>
+              <li data-i="solPat4">Suivi et alerte sonore</li>
+              <li data-i="solPat5">Ajoutable a l ecran d accueil</li>
+            </ul>
+            <a href="./patient.html" class="btn btn-outline" style="margin-top:18px" data-i="solPatOpen">Ouvrir l app patient</a>
+          </article>
+          <article class="solution featured" data-reveal>
+            <span class="ribbon" data-i="solCabRib">Cabinet</span>
+            <div class="solution-icon">☎</div>
+            <h3 data-i="solPhone">Console telephone</h3>
+            <ul>
+              <li data-i="solPhone1">Pour les cabinets sans PC</li>
+              <li data-i="solPhone2">File et appel du suivant</li>
+              <li data-i="solPhone3">Tickets papier</li>
+              <li data-i="solPhone4">Historique et horaires</li>
+              <li data-i="solPhone5">Installable sur telephone</li>
+            </ul>
+            <a href="./cabinet.html" class="btn btn-primary" style="margin-top:18px" data-i="navCabinet">Ouvrir la console</a>
+          </article>
+          <article class="solution" data-reveal>
+            <div class="solution-icon">▦</div>
+            <h3 data-i="solCab">Console ordinateur</h3>
+            <ul>
+              <li data-i="solCab1">La meme console, dans le navigateur</li>
+              <li data-i="solCab2">Appel du patient suivant</li>
+              <li data-i="solCab3">Ajout de ticket papier</li>
+              <li data-i="solCab4">Historique et horaires</li>
+              <li data-i="solCab5">Affiche QR a imprimer</li>
+            </ul>
+            <a href="./cabinet.html" class="btn btn-outline" style="margin-top:18px" data-i="solOpenConsole">Ouvrir dans le navigateur</a>
+          </article>
+          <article class="solution" data-reveal>
+            <div class="solution-icon">▢</div>
+            <h3 data-i="solTv">Ecran TV</h3>
+            <ul>
+              <li data-i="solTv1">Tele normale avec cable HDMI</li>
+              <li data-i="solTv2">Numeros seulement, pas de noms</li>
+              <li data-i="solTv3">Ouvert depuis la console</li>
+              <li data-i="solTv4">Plein ecran dans la salle d attente</li>
+            </ul>
+            <a href="./cabinet.html" class="btn btn-outline" style="margin-top:18px" data-i="solTvOpen">Ouvrir depuis la console</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="tarifs">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <span class="tag" data-i="navPrice">Tarifs</span>
+          <h2 data-i="priceTitle">Un essai, puis un cabinet</h2>
+          <p data-i="priceLead">Promotion de lancement : 45 jours d'essai pour les premiers cabinets. L'abonnement est ensuite active par TAFWITA.</p>
+        </div>
+        <div class="pricing">
+          <article class="price-card" data-reveal>
+            <h3 data-i="navTrial">Essai gratuit</h3>
+            <div class="price">0 <small data-i="price45">DA / 45 jours</small></div>
+            <p class="price-note" data-i="priceTrialNote">Un cabinet, tickets illimites.</p>
+            <ul>
+              <li data-i="solPat">Site patient</li>
+              <li data-i="solPhone">Console telephone</li>
+              <li data-i="solCab">Console ordinateur</li>
+              <li data-i="solTv">Ecran TV</li>
+              <li data-i="liPaper">Tickets papier</li>
+            </ul>
+            <a href="#tarifs" class="js-trial-open btn btn-outline" data-i="startTrial">Commencer l'essai</a>
+          </article>
+          <article class="price-card featured" data-reveal>
+            <span class="ribbon" data-i="priceNow">Actuel</span>
+            <h3 data-i="priceIndiv">Cabinet individuel</h3>
+            <div class="price">2 500 <small data-i="priceMonth">DA / mois</small></div>
+            <p class="price-note" data-i="priceYear">36 000 DA / an. Contactez-nous pour activer.</p>
+            <ul>
+              <li data-i="solPat">Site patient</li>
+              <li data-i="solPhone">Console telephone</li>
+              <li data-i="solCab">Console ordinateur</li>
+              <li data-i="solTv">Ecran TV</li>
+              <li data-i="liPaper">Tickets papier</li>
+              <li data-i="liHist">Historique</li>
+              <li data-i="liSupport">Activation et suivi par TAFWITA</li>
+            </ul>
+            <a href="mailto:tafwitacontact@gmail.com" class="btn btn-primary" data-i="writeUs">Ecrire a TAFWITA</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-soft" id="faq">
+      <div class="container">
+        <div class="section-head" data-reveal><span class="tag" data-i="faqTag">Questions</span><h2 data-i="navFaq">FAQ</h2></div>
+        <div class="faq" data-reveal>
+          <div class="faq-item">
+            <button class="faq-question" type="button"><span data-i="faq1q">Le patient doit-il installer une application ?</span> <span class="faq-sign">+</span></button>
+            <div class="faq-answer"><p data-i="faq1a">Non. Il ouvre une page web sur son telephone. Il peut aussi l'ajouter a l'ecran d'accueil (PWA).</p></div>
+          </div>
+          <div class="faq-item">
+            <button class="faq-question" type="button"><span data-i="faq2q">Comment gerer les patients sans smartphone ?</span> <span class="faq-sign">+</span></button>
+            <div class="faq-answer"><p data-i="faq2a">Le cabinet ajoute un ticket papier depuis la console telephone ou ordinateur. Il rejoint la meme file.</p></div>
+          </div>
+          <div class="faq-item">
+            <button class="faq-question" type="button"><span data-i="faq5q">Et si le cabinet n'a pas d'ordinateur ?</span> <span class="faq-sign">+</span></button>
+            <div class="faq-answer"><p data-i="faq5a">La secretaire ouvre la console cabinet sur son telephone. Elle peut aussi l'ajouter a l'ecran d'accueil. L'affiche QR arrive par e-mail a l'inscription.</p></div>
+          </div>
+          <div class="faq-item">
+            <button class="faq-question" type="button"><span data-i="faq3q">Comment payer l'abonnement ?</span> <span class="faq-sign">+</span></button>
+            <div class="faq-answer"><p data-i="faq3a">Il n'y a pas encore de paiement automatique. Ecrivez a tafwitacontact@gmail.com pour l'essai ou l'abonnement (2500 DA / mois ou 36000 DA / an).</p></div>
+          </div>
+          <div class="faq-item">
+            <button class="faq-question" type="button"><span data-i="faq4q">La file est-elle mise a jour en direct ?</span> <span class="faq-sign">+</span></button>
+            <div class="faq-answer"><p data-i="faq4a">Oui. Le site patient, la console telephone ou ordinateur, et l ecran TV lisent la meme file.</p></div>
+          </div>
+          <div class="faq-item">
+            <button class="faq-question" type="button"><span data-i="faq6q">Comment afficher la file sur une tele ?</span> <span class="faq-sign">+</span></button>
+            <div class="faq-answer"><p data-i="faq6a">Branchez un ordinateur ou un telephone a la tele avec un cable HDMI. Ouvrez l ecran TV depuis la console, puis plein ecran. Une tele normale suffit. Seuls les numeros s affichent.</p></div>
+          </div>
+          <div class="faq-item">
+            <button class="faq-question" type="button"><span data-i="faq7q">Peut-on installer la console cabinet sur un telephone ?</span> <span class="faq-sign">+</span></button>
+            <div class="faq-answer"><p data-i="faq7a">Oui. Ouvrez la console dans le navigateur du telephone, puis ajoutez-la a l ecran d accueil. C est une application web, sans magasin d applications.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="contact">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <span class="tag" data-i="navContact">Contact</span>
+          <h2 data-i="contactTitle">Ecrire a TAFWITA</h2>
+          <p data-i="contactLead">Une question sur l essai, l abonnement ou le cabinet ? Envoyez un message. Votre application e-mail s ouvre avec le texte pret.</p>
+        </div>
+        <div class="contact-grid">
+          <div data-reveal>
+            <p data-i="contactHint">Vous pouvez aussi ecrire directement a</p>
+            <a href="mailto:tafwitacontact@gmail.com">tafwitacontact@gmail.com</a>
+          </div>
+          <form class="contact-card" id="contactForm" data-reveal>
+            <div class="trial-field" style="margin-bottom:14px">
+              <label for="contactNom" data-i="contactName">Nom</label>
+              <input id="contactNom" required>
+            </div>
+            <div class="trial-field" style="margin-bottom:14px">
+              <label for="contactEmail" data-i="contactEmail">E-mail</label>
+              <input id="contactEmail" type="email" required>
+            </div>
+            <div class="trial-field">
+              <label for="contactMessage" data-i="contactMsg">Message</label>
+              <textarea id="contactMessage" required></textarea>
+            </div>
+            <div class="contact-status" id="contactStatus"></div>
+            <button type="submit" class="btn btn-primary" style="margin-top:8px" data-i="contactSend">Envoyer</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta">
+      <div class="container">
+        <div class="cta-box" data-reveal>
+          <h2 data-i="ctaTitle">Essayer TAFWITA 45 jours</h2>
+          <p data-i="ctaText">Creez un cabinet d essai. Gerez la file sur telephone ou ordinateur. Un e-mail contient l affiche QR. L ecran TV s ouvre depuis la console.</p>
+          <a href="#tarifs" class="btn btn-primary btn-large js-trial-open" data-i="startTrial">Commencer l'essai</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-grid">
+      <div>
+        <a href="#accueil" class="logo">TAF<span>WITA</span></a>
+        <p data-i="footLead">File d'attente pour cabinets medicaux en Algerie.</p>
+      </div>
+      <div>
+        <h4 data-i="footProd">Produit</h4>
+        <a href="#fonctionnement" data-i="navHow">Comment ca marche</a>
+        <a href="#solutions" data-i="navSol">Solutions</a>
+        <a href="#tarifs" data-i="navPrice">Tarifs</a>
+        <a href="./cabinet.html" data-i="navCabinet">Console cabinet</a>
+        <a href="./patient.html" data-i="navPatient">App patient</a>
+      </div>
+      <div>
+        <h4 data-i="footContact">Contact</h4>
+        <a href="#contact" data-i="navContact">Contact</a>
+        <a href="mailto:tafwitacontact@gmail.com">tafwitacontact@gmail.com</a>
+      </div>
+      <div>
+        <h4 data-i="footLegal">Informations</h4>
+        <a href="./mentions.html" data-i="mentions">Mentions legales</a>
+        <a href="./confidentialite.html" data-i="privacy">Confidentialite</a>
+      </div>
+    </div>
+    <div class="container copyright">© 2026 TAFWITA</div>
+  </footer>
+
+  <div id="trialModal" class="trial-modal" aria-hidden="true">
+    <div class="trial-backdrop" id="trialBackdrop"></div>
+    <div class="trial-dialog" role="dialog" aria-modal="true" aria-labelledby="trialTitle">
+      <button type="button" class="trial-close" id="trialClose" aria-label="Fermer">×</button>
+      <div class="trial-header">
+        <h2 id="trialTitle" data-i="trialTitle">Commencer l'essai gratuit</h2>
+        <p data-i="trialLead">Promotion lancement : un cabinet est cree pour 45 jours. Le mot de passe ouvre la console.</p>
+      </div>
+      <form id="trialForm">
+        <div class="hp-field" aria-hidden="true">
+          <label for="trialWebsite">Site web</label>
+          <input id="trialWebsite" name="website" type="text" tabindex="-1" autocomplete="off">
+        </div>
+        <div class="trial-grid">
+          <div class="trial-field"><label for="trialNom" data-i="lblNom">Nom</label><input id="trialNom" required></div>
+          <div class="trial-field"><label for="trialPrenom" data-i="lblPrenom">Prenom</label><input id="trialPrenom" required></div>
+          <div class="trial-field"><label for="trialCabinet" data-i="lblCab">Nom du cabinet</label><input id="trialCabinet" required></div>
+          <div class="trial-field"><label for="trialTel" data-i="lblTel">Telephone</label><input id="trialTel" type="tel" required></div>
+          <div class="trial-field"><label for="trialEmail" data-i="lblEmail">E-mail</label><input id="trialEmail" type="email" required></div>
+          <div class="trial-field">
+            <label for="trialSpecialite" data-i="lblSpec">Specialite</label>
+            <select id="trialSpecialite" required>
+              <option value="" data-i="optSpec">Choisir une specialite</option>
+              <option value="Medecine generale">Medecine generale</option>
+              <option value="Cardiologie">Cardiologie</option>
+              <option value="Pediatrie">Pediatrie</option>
+              <option value="Dermatologie">Dermatologie</option>
+              <option value="Gynecologie-obstetrique">Gynecologie-obstetrique</option>
+              <option value="Chirurgie dentaire">Chirurgie dentaire</option>
+              <option value="Ophtalmologie">Ophtalmologie</option>
+              <option value="ORL">ORL</option>
+              <option value="Radiologie">Radiologie</option>
+              <option value="Rhumatologie">Rhumatologie</option>
+              <option value="Gastro-enterologie">Gastro-enterologie</option>
+              <option value="Pneumologie">Pneumologie</option>
+              <option value="Endocrinologie">Endocrinologie</option>
+              <option value="Nephrologie">Nephrologie</option>
+              <option value="Urologie">Urologie</option>
+              <option value="Oncologie">Oncologie</option>
+              <option value="Medecine interne">Medecine interne</option>
+              <option value="Medecine du travail">Medecine du travail</option>
+              <option value="Psychiatrie">Psychiatrie</option>
+              <option value="Autre">Autre</option>
+            </select>
+          </div>
+          <div class="trial-field">
+            <label for="trialWilaya" data-i="lblWilaya">Wilaya</label>
+            <select id="trialWilaya" required>
+              <option value="" data-i="optWilaya">Choisir une wilaya</option>
+              <option value="Adrar">01 - Adrar</option>
+              <option value="Chlef">02 - Chlef</option>
+              <option value="Laghouat">03 - Laghouat</option>
+              <option value="Oum El Bouaghi">04 - Oum El Bouaghi</option>
+              <option value="Batna">05 - Batna</option>
+              <option value="Bejaia">06 - Bejaia</option>
+              <option value="Biskra">07 - Biskra</option>
+              <option value="Bechar">08 - Bechar</option>
+              <option value="Blida">09 - Blida</option>
+              <option value="Bouira">10 - Bouira</option>
+              <option value="Tamanrasset">11 - Tamanrasset</option>
+              <option value="Tebessa">12 - Tebessa</option>
+              <option value="Tlemcen">13 - Tlemcen</option>
+              <option value="Tiaret">14 - Tiaret</option>
+              <option value="Tizi Ouzou">15 - Tizi Ouzou</option>
+              <option value="Alger">16 - Alger</option>
+              <option value="Djelfa">17 - Djelfa</option>
+              <option value="Jijel">18 - Jijel</option>
+              <option value="Setif">19 - Setif</option>
+              <option value="Saida">20 - Saida</option>
+              <option value="Skikda">21 - Skikda</option>
+              <option value="Sidi Bel Abbes">22 - Sidi Bel Abbes</option>
+              <option value="Annaba">23 - Annaba</option>
+              <option value="Guelma">24 - Guelma</option>
+              <option value="Constantine">25 - Constantine</option>
+              <option value="Medea">26 - Medea</option>
+              <option value="Mostaganem">27 - Mostaganem</option>
+              <option value="M'Sila">28 - M'Sila</option>
+              <option value="Mascara">29 - Mascara</option>
+              <option value="Ouargla">30 - Ouargla</option>
+              <option value="Oran">31 - Oran</option>
+              <option value="El Bayadh">32 - El Bayadh</option>
+              <option value="Illizi">33 - Illizi</option>
+              <option value="Bordj Bou Arreridj">34 - Bordj Bou Arreridj</option>
+              <option value="Boumerdes">35 - Boumerdes</option>
+              <option value="El Tarf">36 - El Tarf</option>
+              <option value="Tindouf">37 - Tindouf</option>
+              <option value="Tissemsilt">38 - Tissemsilt</option>
+              <option value="El Oued">39 - El Oued</option>
+              <option value="Khenchela">40 - Khenchela</option>
+              <option value="Souk Ahras">41 - Souk Ahras</option>
+              <option value="Tipaza">42 - Tipaza</option>
+              <option value="Mila">43 - Mila</option>
+              <option value="Ain Defla">44 - Ain Defla</option>
+              <option value="Naama">45 - Naama</option>
+              <option value="Ain Temouchent">46 - Ain Temouchent</option>
+              <option value="Ghardaia">47 - Ghardaia</option>
+              <option value="Relizane">48 - Relizane</option>
+              <option value="Timimoun">49 - Timimoun</option>
+              <option value="Bordj Badji Mokhtar">50 - Bordj Badji Mokhtar</option>
+              <option value="Ouled Djellal">51 - Ouled Djellal</option>
+              <option value="Beni Abbes">52 - Beni Abbes</option>
+              <option value="In Salah">53 - In Salah</option>
+              <option value="In Guezzam">54 - In Guezzam</option>
+              <option value="Touggourt">55 - Touggourt</option>
+              <option value="Djanet">56 - Djanet</option>
+              <option value="El Mghair">57 - El Mghair</option>
+              <option value="El Meniaa">58 - El Meniaa</option>
+              <option value="Aflou">59 - Aflou</option>
+              <option value="Barika">60 - Barika</option>
+              <option value="El Kantara">61 - El Kantara</option>
+              <option value="Bir El Ater">62 - Bir El Ater</option>
+              <option value="El Aricha">63 - El Aricha</option>
+              <option value="Ksar Chellala">64 - Ksar Chellala</option>
+              <option value="Ain Oussera">65 - Ain Oussera</option>
+              <option value="Messaad">66 - Messaad</option>
+              <option value="Ksar El Boukhari">67 - Ksar El Boukhari</option>
+              <option value="Bousaada">68 - Bousaada</option>
+              <option value="El Abiodh Sidi Cheikh">69 - El Abiodh Sidi Cheikh</option>
+            </select>
+          </div>
+          <div class="trial-field"><label for="trialPwd" data-i="lblPin">Mot de passe</label><input id="trialPwd" type="password" minlength="8" autocomplete="new-password" required></div>
+          <div class="trial-field"><label for="trialPwd2" data-i="lblPin2">Confirmer le mot de passe</label><input id="trialPwd2" type="password" minlength="8" autocomplete="new-password" required></div>
+        </div>
+        <div class="trial-note" data-i="trialNote">Au moins 8 caracteres, une lettre et un chiffre. L'identifiant est le nom du cabinet.</div>
+        <div class="trial-message" id="trialMessage"></div>
+        <div class="trial-actions">
+          <button type="button" class="btn btn-outline" id="trialCancel" data-i="cancel">Annuler</button>
+          <button type="submit" class="btn btn-primary" id="trialSubmit" data-i="createTrial">Creer l'essai</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script>
+(function(){
+  var LK = 'tafwita_patient_v5_language';
+  var lang = localStorage.getItem(LK) || 'FR';
+  var I = {
+    FR: {
+      navHow: "Comment ca marche", navSol: "Solutions", navPrice: "Tarifs", navFaq: "FAQ", navContact: "Contact",
+      navPatient: "App patient", navCabinet: "Console cabinet", navTrial: "Essai gratuit",
+      eyebrow: "Pour les cabinets medicaux en Algerie",
+      heroTitle: "La file d'attente medicale,", heroTitleEm: "simple et humaine.",
+      heroText: "Les patients prennent un ticket a distance et suivent leur tour. Le cabinet gere la file sur telephone ou dans le navigateur sur ordinateur, y compris les tickets papier. La file peut s afficher sur une tele via HDMI.",
+      heroCta: "Essayer 45 jours", heroHow: "Voir comment ca marche",
+      proof1: "4 acces", proof1s: "Patient, telephone, ordinateur, TV", proof2: "45 jours", proof2s: "Promotion lancement",
+      floatOk: "Ticket confirme", floatOkS: "Suivi en direct",
+      phoneHi: "Bonjour", phoneCab: "Votre cabinet", phoneLive: "File en direct", phonePill: "Suivi du numero",
+      phoneTicket: "Votre ticket", phoneUpd: "Mise a jour automatique", phoneAlert: "Alerte sonore", phoneTurn: "Quand c'est votre tour",
+      floatApp: "App cabinet", floatAppS: "File mise a jour",
+      howTag: "Comment ca marche", howTitle: "Du telephone du patient a la console du cabinet",
+      howLead: "Une seule file : tickets a distance et tickets papier.",
+      how1t: "Le patient choisit un cabinet", how1p: "Recherche par nom, specialite ou wilaya, puis consultation des horaires.",
+      how2t: "Il prend son ticket", how2p: "Le ticket entre dans la file. Un QR code au cabinet ouvre la meme page.",
+      how3t: "Il est averti", how3p: "Suivi en direct et alerte sonore quand le cabinet l'appelle.",
+      how4t: "Le cabinet appelle", how4p: "Depuis le telephone ou l ordinateur. La file peut s afficher sur une tele HDMI, numeros seulement.",
+      solTag: "Ce qui existe aujourd'hui", solTitle: "Une file, quatre acces",
+      solPat: "Site patient", solPat1: "Recherche de cabinets", solPat2: "Favoris", solPat3: "Prise de ticket a distance", solPat4: "Suivi et alerte sonore",
+      solPat5: "Ajoutable a l ecran d accueil", solPatOpen: "Ouvrir l app patient",
+      solPhone: "Console telephone", solPhone1: "Pour les cabinets sans PC", solPhone2: "File et appel du suivant", solPhone3: "Tickets papier", solPhone4: "Historique et horaires",
+      solPhone5: "Installable sur telephone",
+      solCabRib: "Cabinet", solCab: "Console ordinateur",
+      solCab1: "La meme console, dans le navigateur", solCab2: "Appel du patient suivant", solCab3: "Ajout de ticket papier", solCab4: "Historique et horaires", solCab5: "Affiche QR a imprimer",
+      solOpenConsole: "Ouvrir dans le navigateur",
+      solTv: "Ecran TV", solTv1: "Tele normale avec cable HDMI", solTv2: "Numeros seulement, pas de noms", solTv3: "Ouvert depuis la console", solTv4: "Plein ecran dans la salle d attente", solTvOpen: "Ouvrir depuis la console",
+      priceTitle: "Un essai, puis un cabinet",
+      priceLead: "Promotion de lancement : 45 jours d'essai pour les premiers cabinets. L'abonnement est ensuite active par TAFWITA.",
+      price45: "DA / 45 jours", priceTrialNote: "Un cabinet, tickets illimites.", liPaper: "Tickets papier",
+      startTrial: "Commencer l'essai", priceNow: "Actuel", priceIndiv: "Cabinet individuel",
+      priceMonth: "DA / mois", priceYear: "36 000 DA / an. Contactez-nous pour activer.", liHist: "Historique", liSupport: "Activation et suivi par TAFWITA", writeUs: "Ecrire a TAFWITA",
+      faqTag: "Questions",
+      faq1q: "Le patient doit-il installer une application ?", faq1a: "Non. Il ouvre une page web sur son telephone. Il peut aussi l'ajouter a l'ecran d'accueil (PWA).",
+      faq2q: "Comment gerer les patients sans smartphone ?", faq2a: "Le cabinet ajoute un ticket papier depuis la console telephone ou ordinateur. Il rejoint la meme file.",
+      faq5q: "Et si le cabinet n'a pas d'ordinateur ?", faq5a: "La secretaire ouvre la console cabinet sur son telephone. Elle peut aussi l'ajouter a l'ecran d'accueil. L'affiche QR arrive par e-mail a l'inscription.",
+      faq3q: "Comment payer l'abonnement ?", faq3a: "Il n'y a pas encore de paiement automatique. Ecrivez a tafwitacontact@gmail.com pour l'essai ou l'abonnement (2500 DA / mois ou 36000 DA / an).",
+      faq4q: "La file est-elle mise a jour en direct ?", faq4a: "Oui. Le site patient, la console telephone ou ordinateur, et l ecran TV lisent la meme file.",
+      faq6q: "Comment afficher la file sur une tele ?", faq6a: "Branchez un ordinateur ou un telephone a la tele avec un cable HDMI. Ouvrez l ecran TV depuis la console, puis plein ecran. Une tele normale suffit. Seuls les numeros s affichent.",
+      faq7q: "Peut-on installer la console cabinet sur un telephone ?", faq7a: "Oui. Ouvrez la console dans le navigateur du telephone, puis ajoutez-la a l ecran d accueil. C est une application web, sans magasin d applications.",
+      ctaTitle: "Essayer TAFWITA 45 jours",
+      ctaText: "Creez un cabinet d essai. Gerez la file sur telephone ou ordinateur. Un e-mail contient l affiche QR. L ecran TV s ouvre depuis la console.",
+      footLead: "File d'attente pour cabinets medicaux en Algerie.", footProd: "Produit", footContact: "Contact",
+      footLegal: "Informations", mentions: "Mentions legales", privacy: "Confidentialite",
+      contactTitle: "Ecrire a TAFWITA", contactLead: "Une question sur l essai, l abonnement ou le cabinet ? Envoyez un message. Votre application e-mail s ouvre avec le texte pret.",
+      contactHint: "Vous pouvez aussi ecrire directement a", contactName: "Nom", contactEmail: "E-mail", contactMsg: "Message", contactSend: "Envoyer", contactOk: "Votre application e-mail va s ouvrir.",
+      trialTitle: "Commencer l'essai gratuit",
+      trialLead: "Promotion lancement : un cabinet est cree pour 45 jours. Le mot de passe ouvre la console.",
+      lblNom: "Nom", lblPrenom: "Prenom", lblCab: "Nom du cabinet", lblTel: "Telephone", lblEmail: "E-mail",
+      lblSpec: "Specialite", optSpec: "Choisir une specialite", lblWilaya: "Wilaya", optWilaya: "Choisir une wilaya",
+      lblPin: "Mot de passe", lblPin2: "Confirmer le mot de passe",
+      trialNote: "Au moins 8 caracteres, une lettre et un chiffre. L'identifiant est le nom du cabinet.",
+      cancel: "Annuler", createTrial: "Creer l'essai",
+      errRequired: "Tous les champs sont obligatoires.", errPin: "Le mot de passe doit contenir au moins 8 caracteres, une lettre et un chiffre.",
+      errPinMatch: "Les mots de passe ne correspondent pas.", errSignup: "Erreur inscription",
+      trialOk: "Essai active. Identifiant : {slug}. Connectez-vous avec ce mot de passe. L affiche QR part par e-mail. L ecran TV s ouvre depuis la console.",
+      trialOkConsole: "Ouvrir la console",
+      pageTitle: "TAFWITA - La file d'attente medicale, simplement",
+      pageDesc: "TAFWITA modernise la file d'attente des cabinets medicaux en Algerie.",
+      close: "Fermer", menu: "Ouvrir le menu"
+    },
+    EN: {
+      navHow: "How it works", navSol: "Solutions", navPrice: "Pricing", navFaq: "FAQ", navContact: "Contact",
+      navPatient: "Patient app", navCabinet: "Clinic console", navTrial: "Free trial",
+      eyebrow: "For medical clinics in Algeria",
+      heroTitle: "The medical waiting line,", heroTitleEm: "simple and human.",
+      heroText: "Patients take a ticket remotely and follow their turn. The clinic manages the queue on a phone or in the browser on a computer, including paper tickets. The queue can be shown on a TV via HDMI.",
+      heroCta: "Try 45 days", heroHow: "See how it works",
+      proof1: "4 ways in", proof1s: "Patient, phone, computer, TV", proof2: "45 days", proof2s: "Launch offer",
+      floatOk: "Ticket confirmed", floatOkS: "Live tracking",
+      phoneHi: "Hello", phoneCab: "Your clinic", phoneLive: "Live queue", phonePill: "Number tracking",
+      phoneTicket: "Your ticket", phoneUpd: "Automatic update", phoneAlert: "Sound alert", phoneTurn: "When it is your turn",
+      floatApp: "Clinic app", floatAppS: "Queue updated",
+      howTag: "How it works", howTitle: "From the patient's phone to the clinic console",
+      howLead: "One queue: remote tickets and paper tickets.",
+      how1t: "The patient chooses a clinic", how1p: "Search by name, specialty or wilaya, then check opening hours.",
+      how2t: "They take a ticket", how2p: "The ticket joins the queue. A QR code at the clinic opens the same page.",
+      how3t: "They are notified", how3p: "Live tracking and a sound alert when the clinic calls them.",
+      how4t: "The clinic calls", how4p: "From a phone or computer. The queue can be shown on an HDMI TV, numbers only.",
+      solTag: "What exists today", solTitle: "One queue, four ways in",
+      solPat: "Patient site", solPat1: "Clinic search", solPat2: "Favorites", solPat3: "Remote ticket", solPat4: "Tracking and sound alert",
+      solPat5: "Add to the home screen", solPatOpen: "Open the patient app",
+      solPhone: "Phone console", solPhone1: "For clinics without a PC", solPhone2: "Queue and call next", solPhone3: "Paper tickets", solPhone4: "History and hours",
+      solPhone5: "Installable on a phone",
+      solCabRib: "Clinic", solCab: "Computer console",
+      solCab1: "The same console, in the browser", solCab2: "Call the next patient", solCab3: "Add a paper ticket", solCab4: "History and hours", solCab5: "Printable QR poster",
+      solOpenConsole: "Open in the browser",
+      solTv: "TV screen", solTv1: "Normal TV with an HDMI cable", solTv2: "Numbers only, no names", solTv3: "Opened from the console", solTv4: "Fullscreen in the waiting room", solTvOpen: "Open from the console",
+      priceTitle: "A trial, then a clinic",
+      priceLead: "Launch offer: 45-day trial for the first clinics. The subscription is then activated by TAFWITA.",
+      price45: "DZD / 45 days", priceTrialNote: "One clinic, unlimited tickets.", liPaper: "Paper tickets",
+      startTrial: "Start the trial", priceNow: "Current", priceIndiv: "Individual clinic",
+      priceMonth: "DZD / month", priceYear: "36,000 DZD / year. Contact us to activate.", liHist: "History", liSupport: "Activation and follow-up by TAFWITA", writeUs: "Write to TAFWITA",
+      faqTag: "Questions",
+      faq1q: "Does the patient need to install an app?", faq1a: "No. They open a web page on their phone. They can also add it to the home screen (PWA).",
+      faq2q: "How do you handle patients without a smartphone?", faq2a: "The clinic adds a paper ticket from the phone or computer console. It joins the same queue.",
+      faq5q: "What if the clinic has no computer?", faq5a: "The secretary opens the clinic console on a phone. She can also add it to the home screen. The QR poster is sent by email at signup.",
+      faq3q: "How do I pay the subscription?", faq3a: "There is no automatic payment yet. Write to tafwitacontact@gmail.com for the trial or subscription (2,500 DZD / month or 36,000 DZD / year).",
+      faq4q: "Is the queue updated live?", faq4a: "Yes. The patient site, the phone or computer console, and the TV screen read the same queue.",
+      faq6q: "How do I show the queue on a TV?", faq6a: "Plug a computer or phone into the TV with an HDMI cable. Open the TV screen from the console, then go fullscreen. A normal TV is enough. Only numbers are shown.",
+      faq7q: "Can the clinic console be installed on a phone?", faq7a: "Yes. Open the console in the phone browser, then add it to the home screen. It is a web app, not a store download.",
+      ctaTitle: "Try TAFWITA for 45 days",
+      ctaText: "Create a trial clinic. Run the queue on a phone or computer. An email includes the QR poster. The TV screen opens from the console.",
+      footLead: "Queue management for medical clinics in Algeria.", footProd: "Product", footContact: "Contact",
+      footLegal: "Information", mentions: "Legal notice", privacy: "Privacy",
+      contactTitle: "Write to TAFWITA", contactLead: "A question about the trial, subscription or clinic? Send a message. Your email app opens with the text ready.",
+      contactHint: "You can also write directly to", contactName: "Name", contactEmail: "Email", contactMsg: "Message", contactSend: "Send", contactOk: "Your email app will open.",
+      trialTitle: "Start the free trial",
+      trialLead: "Launch offer: a clinic is created for 45 days. The password opens the console.",
+      lblNom: "Last name", lblPrenom: "First name", lblCab: "Clinic name", lblTel: "Phone", lblEmail: "Email",
+      lblSpec: "Specialty", optSpec: "Choose a specialty", lblWilaya: "Wilaya", optWilaya: "Choose a wilaya",
+      lblPin: "Password", lblPin2: "Confirm password",
+      trialNote: "At least 8 characters, one letter and one number. The login is the clinic name.",
+      cancel: "Cancel", createTrial: "Create the trial",
+      errRequired: "All fields are required.", errPin: "Password must have at least 8 characters, one letter and one number.",
+      errPinMatch: "The passwords do not match.", errSignup: "Signup error",
+      trialOk: "Trial activated. Login: {slug}. Sign in with this password. The QR poster is sent by email. The TV screen opens from the console.",
+      trialOkConsole: "Open the console",
+      pageTitle: "TAFWITA - Medical queue, simply",
+      pageDesc: "TAFWITA modernizes the waiting line for medical clinics in Algeria.",
+      close: "Close", menu: "Open menu"
+    },
+    AR: {
+      navHow: "كيف يعمل", navSol: "الحلول", navPrice: "الأسعار", navFaq: "أسئلة", navContact: "اتصل بنا",
+      navPatient: "تطبيق المريض", navCabinet: "شاشة العيادة", navTrial: "تجربة مجانية",
+      eyebrow: "للعيادات الطبية في الجزائر",
+      heroTitle: "طابور الانتظار الطبي،", heroTitleEm: "بسيط وإنساني.",
+      heroText: "يأخذ المرضى تذكرة عن بُعد ويتابعون دورهم. تدير العيادة الطابور على الهاتف أو في المتصفح على الحاسوب، بما في ذلك التذاكر الورقية. يمكن عرض الطابور على التلفاز عبر HDMI.",
+      heroCta: "جرّب 45 يوماً", heroHow: "شاهد كيف يعمل",
+      proof1: "4 مداخل", proof1s: "المريض، الهاتف، الحاسوب، التلفاز", proof2: "45 يوماً", proof2s: "عرض الإطلاق",
+      floatOk: "تم تأكيد التذكرة", floatOkS: "متابعة مباشرة",
+      phoneHi: "مرحباً", phoneCab: "عيادتك", phoneLive: "الطابور مباشر", phonePill: "متابعة الرقم",
+      phoneTicket: "تذكرتك", phoneUpd: "تحديث تلقائي", phoneAlert: "تنبيه صوتي", phoneTurn: "عندما يحين دورك",
+      floatApp: "تطبيق العيادة", floatAppS: "الطابور محدّث",
+      howTag: "كيف يعمل", howTitle: "من هاتف المريض إلى شاشة العيادة",
+      howLead: "طابور واحد: تذاكر عن بُعد وتذاكر ورقية.",
+      how1t: "يختار المريض عيادة", how1p: "بحث بالاسم أو التخصص أو الولاية، ثم الاطلاع على الأوقات.",
+      how2t: "يأخذ تذكرته", how2p: "تدخل التذكرة إلى الطابور. رمز QR في العيادة يفتح نفس الصفحة.",
+      how3t: "يتم إشعاره", how3p: "متابعة مباشرة وتنبيه صوتي عندما تناديه العيادة.",
+      how4t: "تنادي العيادة", how4p: "من الهاتف أو الحاسوب. يمكن عرض الطابور على تلفاز HDMI، الأرقام فقط.",
+      solTag: "ما هو متاح اليوم", solTitle: "طابور واحد، أربعة مداخل",
+      solPat: "موقع المريض", solPat1: "البحث عن العيادات", solPat2: "المفضلة", solPat3: "أخذ تذكرة عن بُعد", solPat4: "متابعة وتنبيه صوتي",
+      solPat5: "يمكن إضافته إلى الشاشة الرئيسية", solPatOpen: "فتح تطبيق المريض",
+      solPhone: "شاشة الهاتف", solPhone1: "للعيادات دون حاسوب", solPhone2: "الطابور ومناداة التالي", solPhone3: "تذاكر ورقية", solPhone4: "السجل والأوقات",
+      solPhone5: "قابل للتثبيت على الهاتف",
+      solCabRib: "العيادة", solCab: "شاشة الحاسوب",
+      solCab1: "نفس الشاشة، في المتصفح", solCab2: "مناداة المريض التالي", solCab3: "إضافة تذكرة ورقية", solCab4: "السجل والأوقات", solCab5: "ملصق QR للطباعة",
+      solOpenConsole: "فتح في المتصفح",
+      solTv: "شاشة التلفاز", solTv1: "تلفاز عادي بكابل HDMI", solTv2: "الأرقام فقط، دون أسماء", solTv3: "تُفتح من الكونسول", solTv4: "ملء الشاشة في قاعة الانتظار", solTvOpen: "فتح من الكونسول",
+      priceTitle: "تجربة، ثم عيادة",
+      priceLead: "عرض الإطلاق: 45 يوماً تجريبياً للعيادات الأولى. يفعّل الاشتراك بعد ذلك من تافويتا.",
+      price45: "دج / 45 يوماً", priceTrialNote: "عيادة واحدة، تذاكر غير محدودة.", liPaper: "تذاكر ورقية",
+      startTrial: "ابدأ التجربة", priceNow: "الحالي", priceIndiv: "عيادة فردية",
+      priceMonth: "دج / شهر", priceYear: "36 000 دج / سنة. راسلونا للتفعيل.", liHist: "السجل", liSupport: "تفعيل ومتابعة من تافويتا", writeUs: "راسل تافويتا",
+      faqTag: "أسئلة",
+      faq1q: "هل يجب على المريض تثبيت تطبيق؟", faq1a: "لا. يفتح صفحة ويب على هاتفه. يمكنه أيضاً إضافتها إلى الشاشة الرئيسية.",
+      faq2q: "كيف ندير المرضى دون هاتف ذكي؟", faq2a: "تضيف العيادة تذكرة ورقية من شاشة الهاتف أو الحاسوب. تدخل نفس الطابور.",
+      faq5q: "ماذا لو لم يكن للعيادة حاسوب؟", faq5a: "تفتح السكرتيرة شاشة العيادة على هاتفها. يمكنها أيضاً إضافتها إلى الشاشة الرئيسية. ملصق QR يصل بالبريد عند التسجيل.",
+      faq3q: "كيف أدفع الاشتراك؟", faq3a: "لا يوجد دفع آلي بعد. راسلوا tafwitacontact@gmail.com للتجربة أو الاشتراك (2500 دج / شهر أو 36000 دج / سنة).",
+      faq4q: "هل يتحدّث الطابور مباشرة؟", faq4a: "نعم. موقع المريض وشاشة الهاتف أو الحاسوب وشاشة التلفاز يقرأون نفس الطابور.",
+      faq6q: "كيف أعرض الطابور على التلفاز؟", faq6a: "اربط حاسوباً أو هاتفاً بالتلفاز بكابل HDMI. افتح شاشة التلفاز من الكونسول ثم ملء الشاشة. يكفي تلفاز عادي. تُعرض الأرقام فقط.",
+      faq7q: "هل يمكن تثبيت شاشة العيادة على الهاتف؟", faq7a: "نعم. افتح الكونسول في متصفح الهاتف ثم أضفه إلى الشاشة الرئيسية. إنه تطبيق ويب، دون متجر تطبيقات.",
+      ctaTitle: "جرّب تافويتا 45 يوماً",
+      ctaText: "أنشئ عيادة تجريبية. أدِر الطابور على الهاتف أو الحاسوب. يصل ملصق QR بالبريد. شاشة التلفاز تُفتح من الكونسول.",
+      footLead: "طابور انتظار للعيادات الطبية في الجزائر.", footProd: "المنتج", footContact: "اتصل بنا",
+      footLegal: "معلومات", mentions: "إشعارات قانونية", privacy: "الخصوصية",
+      contactTitle: "راسل تافويتا", contactLead: "سؤال عن التجربة أو الاشتراك أو العيادة؟ أرسل رسالة. يفتح تطبيق البريد بالنص جاهزاً.",
+      contactHint: "يمكنك أيضاً الكتابة مباشرة إلى", contactName: "الاسم", contactEmail: "البريد الإلكتروني", contactMsg: "الرسالة", contactSend: "إرسال", contactOk: "سيفتح تطبيق البريد.",
+      trialTitle: "ابدأ التجربة المجانية",
+      trialLead: "عرض الإطلاق: تُنشأ عيادة لمدة 45 يوماً. كلمة المرور تفتح الشاشة.",
+      lblNom: "اللقب", lblPrenom: "الاسم", lblCab: "اسم العيادة", lblTel: "الهاتف", lblEmail: "البريد الإلكتروني",
+      lblSpec: "التخصص", optSpec: "اختر تخصصاً", lblWilaya: "الولاية", optWilaya: "اختر ولاية",
+      lblPin: "كلمة المرور", lblPin2: "تأكيد كلمة المرور",
+      trialNote: "8 أحرف على الأقل، حرف ورقم. المعرّف هو اسم العيادة.",
+      cancel: "إلغاء", createTrial: "إنشاء التجربة",
+      errRequired: "كل الحقول إلزامية.", errPin: "كلمة المرور 8 أحرف على الأقل، مع حرف ورقم.",
+      errPinMatch: "كلمتا المرور غير متطابقتين.", errSignup: "خطأ في التسجيل",
+      trialOk: "تم تفعيل التجربة. المعرّف : {slug}. سجّل الدخول بهذه الكلمة. ملصق QR يُرسل بالبريد. شاشة التلفاز تُفتح من الكونسول.",
+      trialOkConsole: "فتح الشاشة",
+      pageTitle: "تافويتا - طابور الانتظار الطبي، ببساطة",
+      pageDesc: "تافويتا يحدّث طابور انتظار العيادات الطبية في الجزائر.",
+      close: "إغلاق", menu: "فتح القائمة"
+    }
+  };
+  function tr(k){ return (I[lang] && I[lang][k]) || (I.FR[k] || k); }
+  function translate(){
+    document.documentElement.lang = lang === 'AR' ? 'ar' : lang.toLowerCase();
+    document.documentElement.dir = lang === 'AR' ? 'rtl' : 'ltr';
+    var btn = document.getElementById('language');
+    if (btn) btn.textContent = lang;
+    document.querySelectorAll('[data-i]').forEach(function(e){ e.textContent = tr(e.dataset.i); });
+    document.title = tr('pageTitle');
+    var meta = document.querySelector('meta[name="description"]');
+    if (meta) meta.setAttribute('content', tr('pageDesc'));
+    var closeBtn = document.getElementById('trialClose');
+    if (closeBtn) closeBtn.setAttribute('aria-label', tr('close'));
+    var burgerBtn = document.getElementById('burger');
+    if (burgerBtn) burgerBtn.setAttribute('aria-label', tr('menu'));
+  }
+  document.getElementById('language').onclick = function(){
+    lang = {FR:'EN', EN:'AR', AR:'FR'}[lang];
+    localStorage.setItem(LK, lang);
+    translate();
+  };
+  translate();
+
+  var navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', function(){ navbar.classList.toggle('scrolled', window.scrollY > 12); });
+
+  var burger = document.getElementById('burger');
+  var navLinks = document.getElementById('navLinks');
+  burger.addEventListener('click', function(){
+    var open = navLinks.classList.toggle('open');
+    burger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  navLinks.querySelectorAll('a').forEach(function(link){
+    link.addEventListener('click', function(){
+      navLinks.classList.remove('open');
+      burger.setAttribute('aria-expanded', 'false');
+    });
+  });
+
+  document.querySelectorAll('.faq-question').forEach(function(button){
+    button.addEventListener('click', function(){
+      button.parentElement.classList.toggle('open');
+    });
+  });
+
+  document.querySelectorAll('[data-reveal]').forEach(function(el){ el.classList.add('visible'); });
+
+  var m = document.getElementById('trialModal');
+  var f = document.getElementById('trialForm');
+  var msg = document.getElementById('trialMessage');
+  var submit = document.getElementById('trialSubmit');
+  function openModal(){ m.classList.add('open'); m.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
+  function closeModal(){ m.classList.remove('open'); m.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+  document.querySelectorAll('.js-trial-open').forEach(function(x){
+    x.addEventListener('click', function(e){ e.preventDefault(); openModal(); });
+  });
+  document.getElementById('trialBackdrop').onclick = closeModal;
+  document.getElementById('trialClose').onclick = closeModal;
+  document.getElementById('trialCancel').onclick = closeModal;
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
+
+  var contactForm = document.getElementById('contactForm');
+  if (contactForm) {
+    contactForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      var nom = document.getElementById('contactNom').value.trim();
+      var email = document.getElementById('contactEmail').value.trim();
+      var message = document.getElementById('contactMessage').value.trim();
+      var status = document.getElementById('contactStatus');
+      if (!nom || !email || !message) {
+        status.style.color = '#c05050';
+        status.textContent = tr('errRequired');
+        return;
+      }
+      var sujet = encodeURIComponent('TAFWITA');
+      var corps = encodeURIComponent('Nom : ' + nom + '\nE-mail : ' + email + '\n\n' + message);
+      status.style.color = '#2e8b57';
+      status.textContent = tr('contactOk');
+      window.location.href = 'mailto:tafwitacontact@gmail.com?subject=' + sujet + '&body=' + corps;
+    });
+  }
+
+  f.addEventListener('submit', async function(e){
+    e.preventDefault();
+    var p = {
+      nom: document.getElementById('trialNom').value.trim(),
+      prenom: document.getElementById('trialPrenom').value.trim(),
+      cabinet: document.getElementById('trialCabinet').value.trim(),
+      telephone: document.getElementById('trialTel').value.trim(),
+      email: document.getElementById('trialEmail').value.trim(),
+      specialite: document.getElementById('trialSpecialite').value.trim(),
+      wilaya: document.getElementById('trialWilaya').value.trim(),
+      password: document.getElementById('trialPwd').value
+    };
+    var p2 = document.getElementById('trialPwd2').value;
+    if (Object.keys(p).some(function(k){ return !p[k]; })) {
+      msg.style.color = '#c05050'; msg.textContent = tr('errRequired'); return;
+    }
+    if (p.password.length < 8 || !/[A-Za-z]/.test(p.password) || !/\d/.test(p.password)) {
+      msg.style.color = '#c05050'; msg.textContent = tr('errPin'); return;
+    }
+    if (p.password !== p2) {
+      msg.style.color = '#c05050'; msg.textContent = tr('errPinMatch'); return;
+    }
+    p.website = document.getElementById('trialWebsite').value;
+    submit.disabled = true;
+    try {
+      var host = location.hostname;
+      var api = (host === 'localhost' || host === '127.0.0.1')
+        ? 'http://127.0.0.1:8000'
+        : 'https://tafwita-api.onrender.com';
+      var r = await fetch(api.replace(/\/$/, '') + '/api/trial-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(p)
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if (!r.ok) throw Error(d.detail || d.message || tr('errSignup'));
+      var slug = d.cabinet_slug;
+      if (!slug) throw Error(tr('errSignup'));
+      msg.style.color = '#2e8b57';
+      msg.textContent = '';
+      msg.appendChild(document.createTextNode(tr('trialOk').replace('{slug}', slug) + ' '));
+      var lien = document.createElement('a');
+      lien.href = './cabinet.html';
+      lien.textContent = tr('trialOkConsole');
+      msg.appendChild(lien);
+      msg.appendChild(document.createTextNode('.'));
+    } catch (err) {
+      msg.style.color = '#c05050';
+      msg.textContent = err.message;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+})();
+</script>
+</body>
+</html>
