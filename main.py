@@ -80,7 +80,14 @@ def make_affiche_png(nom: str, specialite: str, url: str) -> bytes:
     return buf.getvalue()
 
 
+def smtp_autorise() -> bool:
+    # Render gratuit bloque les ports SMTP. Activer seulement si SMTP_ENABLED=1.
+    return os.getenv("SMTP_ENABLED", "").strip().lower() in ("1", "true", "oui", "yes")
+
+
 def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str):
+    if not smtp_autorise():
+        return
     smtp_host = os.getenv("SMTP_HOST")
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
@@ -525,6 +532,8 @@ def noter_contact(ip: str) -> None:
 
 
 def send_contact_email(nom: str, email: str, message: str) -> None:
+    if not smtp_autorise():
+        return
     smtp_host = os.getenv("SMTP_HOST")
     smtp_user = os.getenv("SMTP_USER")
     smtp_pass = os.getenv("SMTP_PASS")
@@ -956,7 +965,7 @@ def trial_signup(data: TrialSignup, request: Request, background_tasks: Backgrou
     )
     return {
         "status": "success",
-        "message": "Demande envoyee. Verifiez votre e-mail.",
+        "message": "Cabinet cree. Ouvrez la console pour imprimer l affiche QR.",
         "cabinet_slug": cabinet.slug,
         "console_url": cabinet_console_url(),
     }
