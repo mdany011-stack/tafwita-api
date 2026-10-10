@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f9f8">
+  <title>TAFWITA — Mentions legales</title>
+  <style>
+    :root { --bg:#f4f9f8; --text:#24343d; --soft:#50646b; --teal:#16b6b0; --border:#dcefeb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; }
+    header { padding: 18px 0; border-bottom: 1px solid var(--border); background: #fff; }
+    .wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto; }
+    .logo { font-weight: 850; letter-spacing: .8px; color: var(--text); text-decoration: none; }
+    .logo span { color: var(--teal); }
+    nav { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+    nav a { color: var(--soft); text-decoration: none; font-size: 14px; }
+    nav a:hover { color: var(--teal); }
+    main { padding: 48px 0 80px; }
+    h1 { font-size: 32px; letter-spacing: -.8px; }
+    h2 { margin-top: 32px; font-size: 18px; }
+    p, li { color: var(--soft); font-size: 15px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="logo" href="./index.html">TAF<span>WITA</span></a>
+      <nav>
+        <a href="./index.html">Accueil</a>
+        <a href="./confidentialite.html">Confidentialite</a>
+        <a href="mailto:tafwitacontact@gmail.com">Contact</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <h1>Mentions legales</h1>
+      <h2>Editeur</h2>
+      <p>TAFWITA est un service de gestion de file d'attente pour cabinets medicaux en Algerie.</p>
+      <p>Contact : <a href="mailto:tafwitacontact@gmail.com">tafwitacontact@gmail.com</a></p>
+      <h2>Objet du service</h2>
+      <p>Le site permet aux patients de prendre un ticket a distance et de suivre leur tour. Le cabinet gere la file depuis une console web (telephone ou ordinateur) et peut afficher les numeros sur une tele.</p>
+      <h2>Hebergement</h2>
+      <p>Le site vitrine est heberge sur GitHub Pages. L'interface de programmation (API) est hebergee chez Render.</p>
+      <h2>Propriete</h2>
+      <p>Les textes, marques et interfaces TAFWITA sont reserves. Toute reproduction sans autorisation est interdite.</p>
+      <h2>Donnees personnelles</h2>
+      <p>Le traitement des donnees est decrit dans la <a href="./confidentialite.html">politique de confidentialite</a>.</p>
+    </div>
+  </main>
+</body>
+</html>
