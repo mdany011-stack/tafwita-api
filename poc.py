@@ -20,8 +20,10 @@ from main import (
     SessionLocal,
     Cabinet,
     PatientTicket,
+    SupportTicket,
     _pin_attempts,
     _signup_attempts,
+    _contact_attempts,
     est_hash_bcrypt,
 )
 
@@ -494,6 +496,24 @@ r = client.get("/mentions.html")
 check("page mentions", r.status_code, 200)
 r = client.get("/confidentialite.html")
 check("page confidentialite", r.status_code, 200)
+
+_contact_attempts.clear()
+r = client.post("/api/contact", json={
+    "nom": "Bot", "email": "bot@test.com", "message": "spam", "website": "http://spam.test",
+})
+check("contact honeypot refuse", r.status_code, 400)
+r = client.post("/api/contact", json={
+    "nom": "Amine", "email": "amine@example.com", "message": "Question sur l essai",
+})
+check("contact vitrine ok", r.status_code, 200)
+db = SessionLocal()
+try:
+    ticket = db.query(SupportTicket).filter(SupportTicket.email == "amine@example.com").first()
+finally:
+    db.close()
+check_true("contact enregistre", bool(ticket and ticket.message))
+r = client.post("/api/contact", json={"nom": "", "email": "x", "message": ""})
+check("contact champs vides", r.status_code, 400)
 
 print(f"\n=== Resultat : {passed} ok, {failed} echec ===")
 if os.path.exists(POC_DB):
