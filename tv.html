@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#123238">
+<title>TAFWITA — Ecran TV</title>
+<style>
+:root{--bg:#123238;--line:#2d646c;--teal:#4ecdc4;--text:#f4fbfa;--soft:#b7d4d1;--muted:#7ea3a0;--amber:#e8b86d}
+*{box-sizing:border-box}html[dir="rtl"]{text-align:right}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#1e525a,var(--bg));color:var(--text);font:18px "Segoe UI",Tahoma,Arial,sans-serif;min-height:100vh}
+.shell{max-width:1100px;margin:auto;padding:22px 20px 28px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.logo{font-size:28px;font-weight:900}.logo span{color:var(--teal)}
+.sub{margin:4px 0 0;color:var(--muted);font-size:13px}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.tool,.ghost,.primary{border:0;border-radius:12px;font-weight:800;cursor:pointer}
+.tool{height:40px;padding:0 12px;background:#214c53;color:var(--text);border:1px solid var(--line)}
+.view{display:none}.view.active{display:block}
+h1{font-size:32px;margin:8px 0}h2{margin:0}
+.lead{color:var(--soft);line-height:1.55}
+.card{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:20px;padding:20px;margin:16px 0}
+label{display:block;font-weight:700;margin:14px 0 6px}
+.input{width:100%;height:54px;border:1px solid var(--line);border-radius:14px;padding:0 14px;background:#0f2c31;color:var(--text);font:inherit}
+.primary{width:100%;min-height:54px;margin-top:16px;background:linear-gradient(90deg,#329f9a,#55bcb2);color:#fff;font-size:17px}
+.now{text-align:center;padding:28px 10px}
+.now small{display:block;letter-spacing:.18em;text-transform:uppercase;color:var(--soft);font-weight:800}
+.now b{display:block;font-size:clamp(72px,18vw,180px);line-height:1;color:#fff;margin:8px 0}
+.meta{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;color:var(--soft)}
+.badge{padding:6px 12px;border-radius:99px;background:#214c53;font-size:13px;font-weight:800}
+.badge.off{background:#6b5428;color:var(--amber)}.badge.closed{background:#6b3030;color:#ffd0d0}
+.next{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:18px}
+.chip{min-width:88px;padding:14px 16px;border-radius:16px;background:#214c53;text-align:center;font-weight:900;font-size:22px}
+.chip.urgent{background:#6b5428;color:var(--amber)}
+.empty{text-align:center;color:var(--muted);padding:20px}
+.msg{min-height:20px;margin-top:10px;color:#e07a7a;text-align:center}
+</style>
+</head>
+<body>
+<script>
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./service-worker.js").catch(function(){})})}
+</script>
+<div class="shell">
+  <header class="top">
+    <div><div class="logo">TAF<span>WITA</span></div><p class="sub" data-i="sub">Ecran salle d attente</p></div>
+    <div class="tools">
+      <button class="tool" id="language">FR</button>
+      <button class="tool" id="btnFull" data-i="full">Plein ecran</button>
+      <button class="tool" id="btnSwitch" data-i="switchCab" hidden>Changer</button>
+    </div>
+  </header>
+
+  <section class="view active" id="connect">
+    <h1 data-i="title">Ecran TV</h1>
+    <p class="lead" data-i="lead">Branchez un ordinateur ou un telephone a la tele avec un cable HDMI. Ouvrez cette page, entrez l identifiant du cabinet, puis plein ecran. Aucune tele connectee n est necessaire. Seuls les numeros s affichent.</p>
+    <div class="card">
+      <label data-i="lblSlug">Identifiant cabinet</label>
+      <input class="input" id="slug" autocomplete="username">
+      <button class="primary" id="btnOpen" data-i="open">Afficher la file</button>
+      <p class="msg" id="msg"></p>
+    </div>
+  </section>
+
+  <section class="view" id="board">
+    <div class="meta">
+      <div>
+        <h2 id="cabName">Cabinet</h2>
+        <p class="lead" id="cabSpec"></p>
+      </div>
+      <div>
+        <span class="badge" id="dayBadge">—</span>
+        <span id="clock" style="margin-left:10px"></span>
+      </div>
+    </div>
+    <div class="now">
+      <small data-i="now">En consultation</small>
+      <b id="serving">P-00</b>
+    </div>
+    <h2 data-i="nextTitle">A suivre</h2>
+    <div class="next" id="nextList"></div>
+    <p class="empty" id="boardMsg" hidden></p>
+  </section>
+</div>
+
+<script>
+const API=localStorage.getItem("tafwita_api")||"https://tafwita-api.onrender.com";
+const LK="tafwita_tv_language", SK="tafwita_tv_slug";
+let lang=localStorage.getItem(LK)||"FR";
+let slug=localStorage.getItem(SK)||"";
+let lastServing=null, timer=null;
+const I={
+FR:{sub:"Ecran salle d attente",title:"Ecran TV",lead:"Branchez un ordinateur ou un telephone a la tele avec un cable HDMI. Ouvrez cette page, entrez l identifiant du cabinet, puis plein ecran. Aucune tele connectee n est necessaire. Seuls les numeros s affichent.",lblSlug:"Identifiant cabinet",open:"Afficher la file",need:"Identifiant obligatoire.",now:"En consultation",nextTitle:"A suivre",empty:"Aucun patient en attente.",closed:"JOURNEE CLOTUREE",active:"PRISE ACTIVE",stopped:"PRISE ARRETEE",switchCab:"Changer",full:"Plein ecran",none:"—"},
+EN:{sub:"Waiting-room screen",title:"TV screen",lead:"Plug a computer or phone into the TV with an HDMI cable. Open this page, enter the clinic login, then go fullscreen. No smart TV is required. Only ticket numbers are shown.",lblSlug:"Clinic login",open:"Show the queue",need:"Login is required.",now:"Now serving",nextTitle:"Up next",empty:"Nobody waiting.",closed:"DAY CLOSED",active:"INTAKE ON",stopped:"INTAKE OFF",switchCab:"Change",full:"Fullscreen",none:"—"},
+AR:{sub:"شاشة قاعة الانتظار",title:"شاشة التلفاز",lead:"اربط حاسوباً أو هاتفاً بالتلفاز بكابل HDMI. افتح هذه الصفحة، أدخل معرّف العيادة، ثم ملء الشاشة. لا حاجة لتلفاز ذكي. تُعرض الأرقام فقط.",lblSlug:"معرّف العيادة",open:"عرض الطابور",need:"المعرّف إلزامي.",now:"قيد المعاينة",nextTitle:"التالي",empty:"لا يوجد أحد في الانتظار.",closed:"اليوم مغلق",active:"الأخذ مفتوح",stopped:"الأخذ متوقف",switchCab:"تغيير",full:"ملء الشاشة",none:"—"}
+};
+const $=id=>document.getElementById(id);
+const tr=k=>I[lang]&&I[lang][k]||I.FR[k]||k;
+function pad(n){return "P-"+String(n||0).padStart(2,"0")}
+function translate(){
+  document.documentElement.lang=lang==="AR"?"ar":lang.toLowerCase();
+  document.documentElement.dir=lang==="AR"?"rtl":"ltr";
+  $("language").textContent=lang;
+  document.querySelectorAll("[data-i]").forEach(e=>e.textContent=tr(e.dataset.i));
+}
+function show(id){
+  $("connect").classList.toggle("active",id==="connect");
+  $("board").classList.toggle("active",id==="board");
+  $("btnSwitch").hidden=id!=="board";
+}
+function beep(){try{const ctx=new(window.AudioContext||window.webkitAudioContext)();const o=ctx.createOscillator();const g=ctx.createGain();o.connect(g);g.connect(ctx.destination);o.frequency.value=660;g.gain.value=0.07;o.start();setTimeout(()=>{try{o.stop();ctx.close()}catch(e){}},220)}catch(e){}}
+function bind(s){
+  slug=s;localStorage.setItem(SK,s);
+  const u=new URL(location.href);u.searchParams.set("cabinet",s);history.replaceState({},"",u);
+  show("board");refresh();start();
+}
+function start(){stop();timer=setInterval(refresh,4000);setInterval(tick,1000);tick()}
+function stop(){if(timer){clearInterval(timer);timer=null}}
+function tick(){$("clock").textContent=new Date().toLocaleTimeString()}
+async function j(r){try{return await r.json()}catch{return {}}}
+async function refresh(){
+  if(!slug)return;
+  try{
+    const r=await fetch(API+"/api/queue/"+encodeURIComponent(slug));
+    const d=await j(r);
+    if(!r.ok)throw Error(d.detail||"API");
+    $("cabName").textContent=d.cabinet_name||slug;
+    $("cabSpec").textContent=d.specialite||"";
+    const closed=d.day_closed,open=d.accept_tickets;
+    $("dayBadge").textContent=closed?tr("closed"):open?tr("active"):tr("stopped");
+    $("dayBadge").className="badge "+(closed?"closed":open?"":"off");
+    const tickets=d.tickets||[];
+    const serving=tickets.find(t=>t.statut==="serving");
+    const num=serving?serving.ticket_num:d.serving_num;
+    const label=num?pad(num):tr("none");
+    $("serving").textContent=label;
+    if(lastServing!==null&&label!==lastServing&&num)beep();
+    lastServing=label;
+    const next=tickets.filter(t=>["waiting","returned","urgent","urgent_requested"].includes(t.statut)).slice(0,6);
+    $("nextList").innerHTML=next.length?next.map(t=>`<div class="chip ${t.statut==="urgent"?"urgent":""}">${pad(t.ticket_num)}</div>`).join(""):"";
+    $("boardMsg").hidden=!!next.length;
+    $("boardMsg").textContent=tr("empty");
+  }catch(e){$("boardMsg").hidden=false;$("boardMsg").textContent=e.message}
+}
+$("language").onclick=()=>{lang={FR:"EN",EN:"AR",AR:"FR"}[lang];localStorage.setItem(LK,lang);translate()};
+$("btnSwitch").onclick=()=>{stop();slug="";localStorage.removeItem(SK);show("connect")};
+$("btnOpen").onclick=()=>{
+  const s=$("slug").value.trim().toLowerCase().replace(/\s+/g,"-");
+  if(!s){$("msg").textContent=tr("need");return}
+  bind(s);
+};
+$("btnFull").onclick=()=>{
+  const el=document.documentElement;
+  if(!document.fullscreenElement)el.requestFullscreen&&el.requestFullscreen();
+  else document.exitFullscreen&&document.exitFullscreen();
+};
+translate();
+(function(){
+  const fromUrl=new URLSearchParams(location.search).get("cabinet");
+  if(fromUrl)bind(fromUrl.toLowerCase());
+  else if(slug)bind(slug);
+})();
+</script>
+</body>
+</html>
