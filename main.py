@@ -112,12 +112,23 @@ def _http_json(url: str, headers: dict, payload: dict) -> None:
     for cle, val in headers.items():
         req.add_header(cle, val)
     req.add_header("Content-Type", "application/json")
+    req.add_header("Accept", "application/json")
+    req.add_header("User-Agent", "TAFWITA/1.0 (+https://tafwita-api.onrender.com)")
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             resp.read()
     except urllib.error.HTTPError as e:
-        raw = e.read().decode("utf-8", "replace")[:400]
-        raise RuntimeError("HTTP %s: %s" % (e.code, raw)) from e
+        raw = e.read().decode("utf-8", "replace")[:800]
+        if "1010" in raw:
+            raise RuntimeError(
+                "Cloudflare 1010 : requete bloquee vers Resend."
+            ) from e
+        try:
+            data = json.loads(raw)
+            msg = data.get("message") or data.get("name") or raw
+        except json.JSONDecodeError:
+            msg = raw
+        raise RuntimeError("HTTP %s: %s" % (e.code, msg)) from e
 
 
 def envoyer_email(
