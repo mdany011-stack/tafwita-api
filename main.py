@@ -24,7 +24,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 def _pages_base() -> str:
     return os.getenv(
         "TAFWITA_PATIENT_URL",
-        "https://mdany011-stack.github.io/tafwita",
+        "https://tafwita.pages.dev",
     ).rstrip("/")
 
 
@@ -94,14 +94,19 @@ def email_configure() -> bool:
 
 
 def _mail_from_https() -> str:
-    # Resend n'envoie pas depuis Gmail. Sans domaine verifie : onboarding@resend.dev.
+    # pages.dev / Gmail / example.com ne peuvent pas etre expediteur Resend.
+    # Sans domaine DNS verifie : uniquement beth.t@example.com.
     brut = (os.getenv("MAIL_FROM") or "").strip()
     bas = brut.lower()
-    if "resend.dev" in bas:
-        return brut if "<" in brut else f"TAFWITA <{brut}>"
+    interdit = (
+        "gmail.com", "googlemail.com", "example.com", "pages.dev",
+        "github.io", "http://", "https://",
+    )
     if os.getenv("RESEND_API_KEY"):
+        if "resend.dev" in bas and not any(x in bas for x in ("example.com", "pages.dev")):
+            return brut if "<" in brut else f"TAFWITA <{brut}>"
         return "TAFWITA <beth.t@example.com>"
-    if brut and "gmail.com" not in bas and "googlemail.com" not in bas:
+    if brut and "@" in brut and not any(x in bas for x in interdit):
         return brut if "<" in brut else f"TAFWITA <{brut}>"
     return "TAFWITA <beth.t@example.com>"
 
@@ -414,6 +419,7 @@ _CORS_EXTRAS = [o.strip() for o in os.getenv("TAFWITA_CORS", "").split(",") if o
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://tafwita.pages.dev",
         "https://mdany011-stack.github.io",
         "http://localhost",
         "http://127.0.0.1",
