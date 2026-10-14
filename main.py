@@ -94,8 +94,13 @@ def email_configure() -> bool:
 
 
 def _mail_from_https() -> str:
+    # Resend n'envoie pas depuis Gmail. Sans domaine verifie : onboarding@resend.dev.
     brut = (os.getenv("MAIL_FROM") or "").strip()
     bas = brut.lower()
+    if "resend.dev" in bas:
+        return brut if "<" in brut else f"TAFWITA <{brut}>"
+    if os.getenv("RESEND_API_KEY"):
+        return "TAFWITA <beth.t@example.com>"
     if brut and "gmail.com" not in bas and "googlemail.com" not in bas:
         return brut if "<" in brut else f"TAFWITA <{brut}>"
     return "TAFWITA <beth.t@example.com>"
@@ -107,8 +112,12 @@ def _http_json(url: str, headers: dict, payload: dict) -> None:
     for cle, val in headers.items():
         req.add_header(cle, val)
     req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8", "replace")[:400]
+        raise RuntimeError("HTTP %s: %s" % (e.code, raw)) from e
 
 
 def envoyer_email(
@@ -118,10 +127,10 @@ def envoyer_email(
     png_bytes: Optional[bytes] = None,
     png_name: str = "tafwita-affiche-qr.png",
     reply_to: Optional[str] = None,
-) -> None:
+) -> Optional[str]:
     dest = (to_email or "").strip()
     if not dest or "@" not in dest:
-        return
+        return "adresse e-mail invalide"
     resend = (os.getenv("RESEND_API_KEY") or "").strip()
     brevo = (os.getenv("BREVO_API_KEY") or "").strip()
     repondre = (reply_to or "").strip() or None
@@ -145,7 +154,7 @@ def envoyer_email(
                 {"Authorization": "Bearer " + resend},
                 payload,
             )
-            return
+            return None
         if brevo:
             expediteur = _mail_from_https()
             if "<" in expediteur and ">" in expediteur:
@@ -171,14 +180,14 @@ def envoyer_email(
                 {"api-key": brevo, "accept": "application/json"},
                 payload,
             )
-            return
+            return None
         if not smtp_autorise():
-            return
+            return "aucun service e-mail configure (RESEND_API_KEY)"
         smtp_host = os.getenv("SMTP_HOST")
         smtp_user = os.getenv("SMTP_USER")
         smtp_pass = os.getenv("SMTP_PASS")
         if not (smtp_host and smtp_user and smtp_pass):
-            return
+            return "SMTP incomplet"
         smtp_port = int(os.getenv("SMTP_PORT", "465"))
         mail_from = os.getenv("MAIL_FROM", smtp_user)
         msg = EmailMessage()
@@ -194,15 +203,28 @@ def envoyer_email(
         with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
             server.login(smtp_user, smtp_pass)
             server.send_message(msg)
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError, ValueError):
-        return
+        return None
+    except Exception as e:
+        return str(e)[:400]
+
+
+def noter_echec_email(nom: str, email: str, detail: str) -> None:
+    db = SessionLocal()
+    try:
+        db.add(SupportTicket(
+            nom=nom or "TAFWITA",
+            email=email,
+            sujet="Echec e-mail inscription",
+            message=(detail or "envoi refuse")[:500],
+        ))
+        db.commit()
     except Exception:
-        return
+        db.rollback()
+    finally:
+        db.close()
 
 
 def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str):
-    if not email_configure():
-        return
     take_url = patient_take_url(slug)
     console_url = cabinet_console_url()
     body = (
@@ -211,21 +233,34 @@ def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str
         f"Identifiant cabinet : {slug}\n"
         f"Console secretaire (telephone) : {console_url}\n"
         f"Page patient pour le QR : {take_url}\n\n"
-        "L'affiche QR est en piece jointe. Imprimez-la et affichez-la au cabinet.\n"
+        "L'affiche QR est en piece jointe si le serveur a pu la generer. "
+        "Vous pouvez aussi l'imprimer depuis la console.\n"
         "Le mot de passe n'est pas envoye par e-mail. Utilisez celui choisi a l'inscription.\n\n"
         "TAFWITA"
     )
+    if not email_configure():
+        noter_echec_email(nom, to_email, "RESEND_API_KEY absent sur le serveur")
+        return
     png = None
     try:
         png = make_affiche_png(nom, specialite, take_url)
     except Exception:
         png = None
-    envoyer_email(
+    err = envoyer_email(
         to_email,
         "TAFWITA — votre cabinet et votre affiche QR",
         body,
         png_bytes=png,
     )
+    if err and png:
+        err = envoyer_email(
+            to_email,
+            "TAFWITA — votre cabinet",
+            body,
+            png_bytes=None,
+        )
+    if err:
+        noter_echec_email(nom, to_email, err)
 
 
 #=============================================================
@@ -386,7 +421,11 @@ app.add_middleware(
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "service": "tafwita-api"}
+    return {
+        "status": "healthy",
+        "service": "tafwita-api",
+        "email_ok": email_configure(),
+    }
 
 
 _DIR_CODE = os.path.dirname(os.path.abspath(__file__))
