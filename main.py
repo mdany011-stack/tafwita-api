@@ -1,24 +1,24 @@
+import base64
 import hashlib
 import io
+import json
 import os
 import secrets
+import ssl
+import smtplib
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from typing import Optional, List
 import bcrypt
-from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from html import escape
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
-#=============================================================
-
-
-import ssl
-import smtplib
-from email.message import EmailMessage
-from fastapi import BackgroundTasks
 
 
 def _pages_base() -> str:
@@ -81,20 +81,128 @@ def make_affiche_png(nom: str, specialite: str, url: str) -> bytes:
 
 
 def smtp_autorise() -> bool:
-    # Render gratuit bloque les ports SMTP. Activer seulement si SMTP_ENABLED=1.
+    # Render gratuit bloque les ports SMTP (465/587). HTTPS (Resend/Brevo) reste possible.
     return os.getenv("SMTP_ENABLED", "").strip().lower() in ("1", "true", "oui", "yes")
 
 
+def email_https_ok() -> bool:
+    return bool(os.getenv("RESEND_API_KEY") or os.getenv("BREVO_API_KEY"))
+
+
+def email_configure() -> bool:
+    return email_https_ok() or smtp_autorise()
+
+
+def _mail_from_https() -> str:
+    brut = (os.getenv("MAIL_FROM") or "").strip()
+    bas = brut.lower()
+    if brut and "gmail.com" not in bas and "googlemail.com" not in bas:
+        return brut if "<" in brut else f"TAFWITA <{brut}>"
+    return "TAFWITA <beth.t@example.com>"
+
+
+def _http_json(url: str, headers: dict, payload: dict) -> None:
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST")
+    for cle, val in headers.items():
+        req.add_header(cle, val)
+    req.add_header("Content-Type", "application/json")
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        resp.read()
+
+
+def envoyer_email(
+    to_email: str,
+    subject: str,
+    body: str,
+    png_bytes: Optional[bytes] = None,
+    png_name: str = "tafwita-affiche-qr.png",
+    reply_to: Optional[str] = None,
+) -> None:
+    dest = (to_email or "").strip()
+    if not dest or "@" not in dest:
+        return
+    resend = (os.getenv("RESEND_API_KEY") or "").strip()
+    brevo = (os.getenv("BREVO_API_KEY") or "").strip()
+    repondre = (reply_to or "").strip() or None
+    try:
+        if resend:
+            payload = {
+                "from": _mail_from_https(),
+                "to": [dest],
+                "subject": subject,
+                "text": body,
+            }
+            if repondre:
+                payload["reply_to"] = repondre
+            if png_bytes:
+                payload["attachments"] = [{
+                    "filename": png_name,
+                    "content": base64.b64encode(png_bytes).decode("ascii"),
+                }]
+            _http_json(
+                "https://api.resend.com/emails",
+                {"Authorization": "Bearer " + resend},
+                payload,
+            )
+            return
+        if brevo:
+            expediteur = _mail_from_https()
+            if "<" in expediteur and ">" in expediteur:
+                nom_exp = expediteur.split("<", 1)[0].strip() or "TAFWITA"
+                mail_exp = expediteur.split("<", 1)[1].rstrip(">").strip()
+            else:
+                nom_exp, mail_exp = "TAFWITA", expediteur
+            payload = {
+                "sender": {"name": nom_exp, "email": mail_exp},
+                "to": [{"email": dest}],
+                "subject": subject,
+                "textContent": body,
+            }
+            if repondre:
+                payload["replyTo"] = {"email": repondre}
+            if png_bytes:
+                payload["attachment"] = [{
+                    "name": png_name,
+                    "content": base64.b64encode(png_bytes).decode("ascii"),
+                }]
+            _http_json(
+                "https://api.brevo.com/v3/smtp/email",
+                {"api-key": brevo, "accept": "application/json"},
+                payload,
+            )
+            return
+        if not smtp_autorise():
+            return
+        smtp_host = os.getenv("SMTP_HOST")
+        smtp_user = os.getenv("SMTP_USER")
+        smtp_pass = os.getenv("SMTP_PASS")
+        if not (smtp_host and smtp_user and smtp_pass):
+            return
+        smtp_port = int(os.getenv("SMTP_PORT", "465"))
+        mail_from = os.getenv("MAIL_FROM", smtp_user)
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = mail_from
+        msg["To"] = dest
+        if repondre:
+            msg["Reply-To"] = repondre
+        msg.set_content(body)
+        if png_bytes:
+            msg.add_attachment(png_bytes, maintype="image", subtype="png", filename=png_name)
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError, ValueError):
+        return
+    except Exception:
+        return
+
+
 def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str):
-    if not smtp_autorise():
+    if not email_configure():
         return
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASS")
-    if not (smtp_host and smtp_user and smtp_pass and to_email):
-        return
-    smtp_port = int(os.getenv("SMTP_PORT", "465"))
-    mail_from = os.getenv("MAIL_FROM", smtp_user)
     take_url = patient_take_url(slug)
     console_url = cabinet_console_url()
     body = (
@@ -107,20 +215,17 @@ def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str
         "Le mot de passe n'est pas envoye par e-mail. Utilisez celui choisi a l'inscription.\n\n"
         "TAFWITA"
     )
+    png = None
     try:
         png = make_affiche_png(nom, specialite, take_url)
-        msg = EmailMessage()
-        msg["Subject"] = "TAFWITA — votre cabinet et votre affiche QR"
-        msg["From"] = mail_from
-        msg["To"] = to_email
-        msg.set_content(body)
-        msg.add_attachment(png, maintype="image", subtype="png", filename="tafwita-affiche-qr.png")
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
     except Exception:
-        return
+        png = None
+    envoyer_email(
+        to_email,
+        "TAFWITA — votre cabinet et votre affiche QR",
+        body,
+        png_bytes=png,
+    )
 
 
 #=============================================================
@@ -259,14 +364,21 @@ _pii_ephemere = {}
 # 3. APP
 # ============================================================
 app = FastAPI(title="TAFWITA API Cloud", description="Gestion des files et des abonnements")
+_CORS_EXTRAS = [o.strip() for o in os.getenv("TAFWITA_CORS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://mdany011-stack.github.io",
         "http://localhost",
         "http://127.0.0.1",
+        *_CORS_EXTRAS,
     ],
-    allow_origin_regex=r"https://mdany011-stack\.github\.io|http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=(
+        r"https://mdany011-stack\.github\.io"
+        r"|https://([a-z0-9-]+\.)*(pages\.dev|github\.io)"
+        r"|https://tafwita-api\.onrender\.com"
+        r"|http://(localhost|127\.0\.0\.1)(:\d+)?"
+    ),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -512,31 +624,15 @@ def noter_prise(ip: str) -> None:
 
 
 def send_contact_email(nom: str, email: str, message: str) -> None:
-    if not smtp_autorise():
+    if not email_configure():
         return
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASS")
-    if not (smtp_host and smtp_user and smtp_pass):
-        return
-    smtp_port = int(os.getenv("SMTP_PORT", "465"))
-    mail_from = os.getenv("MAIL_FROM", smtp_user)
     inbox = os.getenv("CONTACT_EMAIL", "tafwitacontact@gmail.com")
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = "TAFWITA — message du site"
-        msg["From"] = mail_from
-        msg["To"] = inbox
-        msg["Reply-To"] = email
-        msg.set_content(
-            f"Nom : {nom}\nE-mail : {email}\n\n{message}\n"
-        )
-        context = ssl.create_default_context()
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-    except Exception:
-        return
+    envoyer_email(
+        inbox,
+        "TAFWITA — message du site",
+        f"Nom : {nom}\nE-mail : {email}\n\n{message}\n",
+        reply_to=email,
+    )
 
 
 def verifier_limite_pin(slug: str, ip: str) -> None:
@@ -938,6 +1034,18 @@ def trial_signup(data: TrialSignup, request: Request, background_tasks: Backgrou
     db.add(cabinet)
     db.commit()
     db.refresh(cabinet)
+    db.add(SupportTicket(
+        nom=cabinet.nom_medecin or data.cabinet,
+        email=(data.email or "").strip() or None,
+        sujet="Inscription essai",
+        message=(
+            f"Identifiant : {cabinet.slug}\n"
+            f"Telephone : {data.telephone}\n"
+            f"Specialite : {cabinet.specialite}\n"
+            f"Wilaya : {data.wilaya}"
+        ),
+    ))
+    db.commit()
     background_tasks.add_task(
         send_trial_welcome_email,
         data.email,
@@ -950,6 +1058,7 @@ def trial_signup(data: TrialSignup, request: Request, background_tasks: Backgrou
         "message": "Cabinet cree. Ouvrez la console pour imprimer l affiche QR.",
         "cabinet_slug": cabinet.slug,
         "console_url": cabinet_console_url(),
+        "email_prevu": email_configure(),
     }
 
 
