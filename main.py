@@ -123,61 +123,6 @@ def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str
         return
 
 
-def send_confirmation_email(to_email: str, verify_url: str):
-    print("=== EMAIL TASK START ===")
-    print("to_email =", to_email)
-    print("verify_url =", verify_url)
-
-    smtp_host = os.getenv("SMTP_HOST")
-    smtp_port = int(os.getenv("SMTP_PORT", "465"))
-    smtp_user = os.getenv("SMTP_USER")
-    smtp_pass = os.getenv("SMTP_PASS")
-    mail_from = os.getenv("MAIL_FROM", smtp_user)
-
-    print("smtp_host =", smtp_host)
-    print("smtp_port =", smtp_port)
-    print("smtp_user =", smtp_user)
-    print("mail_from =", mail_from)
-    print("smtp_pass exists =", bool(smtp_pass))
-
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = "Confirmez votre inscription TAFWITA"
-        msg["From"] = mail_from
-        msg["To"] = to_email
-
-        body = (
-            "Bonjour,\n\n"
-            "Cliquez sur ce lien pour confirmer votre inscription TAFWITA :\n"
-            f"{verify_url}\n\n"
-            "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail."
-        )
-
-        msg.set_content(body)
-
-        context = ssl.create_default_context()
-
-        print("Opening SMTP connection...")
-        with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context) as server:
-            server.set_debuglevel(1)
-            print("SMTP connection opened")
-            print("Logging in...")
-            server.login(smtp_user, smtp_pass)
-            print("Login success")
-            server.send_message(msg)
-            print("Message sent successfully")
-
-        print("=== EMAIL TASK END SUCCESS ===")
-
-    except Exception as e:
-        print("=== EMAIL TASK ERROR ===")
-        print(repr(e))
-        raise
-
-
-
-
-
 #=============================================================
 # ============================================================
 # 1. CONNEXION BASE DE DONNEES
@@ -291,6 +236,7 @@ MAX_PIN_FAILURES = 5
 LOCK_MINUTES = 15
 MAX_SIGNUP_PER_HOUR = 3
 MAX_CONTACT_PER_HOUR = 5
+MAX_TAKE_PER_HOUR = 30
 PRIX_MENSUEL_DA = 2500
 PRIX_ANNUEL_DA = 25000
 TZ_ALGERIE = timezone(timedelta(hours=1))
@@ -305,6 +251,7 @@ _pin_attempts = {}
 # Inscriptions : ip -> [horodatages]
 _signup_attempts = {}
 _contact_attempts = {}
+_take_attempts = {}
 # Nom / telephone patients : jamais en SQL, seulement en RAM le temps du relais cabinet.
 _pii_ephemere = {}
 
@@ -321,7 +268,7 @@ app.add_middleware(
     ],
     allow_origin_regex=r"https://mdany011-stack\.github\.io|http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -384,8 +331,17 @@ def get_db():
         db.close()
 
 
+def secrets_egaux(a: Optional[str], b: Optional[str]) -> bool:
+    if not a or not b:
+        return False
+    try:
+        return secrets.compare_digest(str(a), str(b))
+    except (TypeError, ValueError):
+        return False
+
+
 def check_admin(x_admin_token: Optional[str] = Header(None)):
-    if not ADMIN_TOKEN or not x_admin_token or x_admin_token != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or not secrets_egaux(x_admin_token, ADMIN_TOKEN):
         raise HTTPException(status_code=401, detail="Non autorise.")
     return True
 
@@ -492,10 +448,18 @@ def extraire_bearer(authorization: Optional[str]) -> Optional[str]:
     return None
 
 
+def derriere_proxy() -> bool:
+    # Render pose X-Forwarded-For. En local, on ignore l'en-tete (spoofable).
+    if os.getenv("RENDER", "").strip():
+        return True
+    return os.getenv("TRUST_PROXY", "").strip().lower() in ("1", "true", "oui", "yes")
+
+
 def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    if derriere_proxy():
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "inconnu"
 
 
@@ -529,6 +493,22 @@ def verifier_limite_contact(ip: str) -> None:
 
 def noter_contact(ip: str) -> None:
     _contact_attempts.setdefault(ip, []).append(datetime.utcnow())
+
+
+def verifier_limite_prise(ip: str) -> None:
+    maintenant = datetime.utcnow()
+    seuil = maintenant - timedelta(hours=1)
+    horaires = [t for t in _take_attempts.get(ip, []) if t > seuil]
+    _take_attempts[ip] = horaires
+    if len(horaires) >= MAX_TAKE_PER_HOUR:
+        raise HTTPException(
+            status_code=429,
+            detail="Trop de tickets, reessayez plus tard.",
+        )
+
+
+def noter_prise(ip: str) -> None:
+    _take_attempts.setdefault(ip, []).append(datetime.utcnow())
 
 
 def send_contact_email(nom: str, email: str, message: str) -> None:
@@ -704,13 +684,13 @@ def exiger_suivi_si_present(ticket: PatientTicket, request: Request, body=None) 
     if not ticket.suivi_token_hash:
         raise HTTPException(status_code=404, detail="Ticket introuvable.")
     tok = extraire_suivi(request, body)
-    if not tok or hash_jeton(tok) != ticket.suivi_token_hash:
+    if not tok or not secrets_egaux(hash_jeton(tok), ticket.suivi_token_hash):
         raise HTTPException(status_code=404, detail="Ticket introuvable.")
 
 
 def memoriser_pii(ticket_id: int, nom: Optional[str], tel: Optional[str]) -> None:
-    nom_ok = (nom or "").strip() or None
-    tel_ok = (tel or "").strip() or None
+    nom_ok = (nom or "").strip()[:80] or None
+    tel_ok = (tel or "").strip()[:20] or None
     if nom_ok or tel_ok:
         _pii_ephemere[ticket_id] = {"nom_patient": nom_ok, "telephone": tel_ok}
 
@@ -782,6 +762,8 @@ def cabinet_public_dict(c: Cabinet) -> dict:
         "ticket_mode": c.ticket_mode,
         "ticket_start_time": c.ticket_start_time,
         "ticket_end_time": c.ticket_end_time,
+        "opening_time": c.opening_time,
+        "closing_time": c.closing_time,
     }
 
 
@@ -1113,7 +1095,11 @@ def page_prise_qr(slug: str, db: Session = Depends(get_db)):
 
 # D. PRENDRE UN TICKET (patient)
 @app.post("/api/tickets/take")
-def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
+def take_ticket(data: PatientTicketCreate, request: Request, db: Session = Depends(get_db)):
+    ip = client_ip(request)
+    verifier_limite_prise(ip)
+    if not (data.nom_patient or "").strip():
+        raise HTTPException(status_code=400, detail="Le nom est obligatoire.")
     cabinet = get_cabinet_or_404(db, data.cabinet_slug)
     exiger_abonnement(cabinet)
     if cabinet.day_closed or not cabinet.accept_tickets:
@@ -1137,6 +1123,7 @@ def take_ticket(data: PatientTicketCreate, db: Session = Depends(get_db)):
     db.refresh(new_ticket)
     memoriser_pii(new_ticket.id, data.nom_patient, data.telephone)
     log_event(db, new_ticket.id, "created")
+    noter_prise(ip)
 
     return {
         "status": "success",
@@ -1158,7 +1145,7 @@ def track_ticket(ticket_id: int, request: Request, db: Session = Depends(get_db)
             PatientTicket.statut.in_(list(STATUTS_AVANT_VOUS)),
             PatientTicket.ticket_num < ticket.ticket_num,
         ).count()
-    payload = ticket_to_dict(ticket)
+    payload = ticket_public_dict(ticket)
     payload["waiting_before_you"] = waiting_before_you
     return {"ticket": payload, "waiting_before_you": waiting_before_you}
 
@@ -1272,6 +1259,8 @@ def add_manual_ticket(
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
 ):
+    if not (data.nom_patient or "").strip():
+        raise HTTPException(status_code=400, detail="Le nom est obligatoire.")
     cabinet = authentifier_cabinet(
         db, data.cabinet_slug, request, authorization, secret_depuis_body(data)
     )
@@ -1297,6 +1286,7 @@ def add_manual_ticket(
     return {
         "status": "success",
         "ticket": ticket_echo_dict(new_ticket, data.nom_patient, data.telephone),
+        "suivi_token": brut,
     }
 
 
@@ -1655,7 +1645,7 @@ def admin_stats(db: Session = Depends(get_db), auth: bool = Depends(check_admin)
 
 @app.post("/api/admin/login")
 def admin_login(data: AdminLogin):
-    if not ADMIN_TOKEN or data.password != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or not secrets_egaux(data.password, ADMIN_TOKEN):
         raise HTTPException(status_code=401, detail="Mot de passe incorrect.")
     return {"status": "success", "token": ADMIN_TOKEN}
 
