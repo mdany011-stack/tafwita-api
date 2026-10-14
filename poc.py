@@ -24,6 +24,7 @@ from main import (
     _pin_attempts,
     _signup_attempts,
     _contact_attempts,
+    _take_attempts,
     est_hash_bcrypt,
 )
 
@@ -166,6 +167,11 @@ r = client.post("/api/tickets/take", json={
     "telephone": "0555111222",
 })
 check("prise de ticket patient (public)", r.status_code, 200)
+r_vide = client.post("/api/tickets/take", json={
+    "cabinet_slug": "dr-alpha",
+    "nom_patient": "   ",
+})
+check("prise sans nom refusee", r_vide.status_code, 400)
 ticket_a = r.json()["ticket"]
 tid_a = ticket_a["id"]
 suivi_a = r.json().get("suivi_token")
@@ -202,6 +208,7 @@ r = client.post("/api/tickets/add-manual", json={
     "nom_patient": "Ticket Papier",
 }, headers=auth(token_a))
 check("add-manual avec jeton", r.status_code, 200)
+check_true("add-manual rend un jeton de suivi", bool(r.json().get("suivi_token")))
 
 # --- Isolation inter-cabinets ---
 r = client.post("/api/cabinets/dr-beta/start-day", json={}, headers=auth(token_b))
@@ -260,6 +267,8 @@ check("suivi patient sans jeton suivi", r.status_code, 404)
 
 r = client.get(f"/api/tickets/{tid_a}/patient", headers={"X-Suivi-Token": suivi_a})
 check("suivi patient avec jeton suivi", r.status_code, 200)
+check("suivi patient sans nom", r.json().get("ticket", {}).get("nom_patient"), None)
+check("suivi patient sans telephone", r.json().get("ticket", {}).get("telephone"), None)
 
 r = client.get("/api/cabinets")
 check("liste cabinets publique", r.status_code, 200)
@@ -514,6 +523,51 @@ finally:
 check_true("contact enregistre", bool(ticket and ticket.message))
 r = client.post("/api/contact", json={"nom": "", "email": "x", "message": ""})
 check("contact champs vides", r.status_code, 400)
+
+# --- X-Forwarded-For spoofe ne contourne pas les limites (hors proxy) ---
+_signup_attempts.clear()
+for i in range(3):
+    r = client.post("/api/cabinets/register", json={
+        "nom_medecin": "Dr Xff %d" % i,
+        "specialite": "Medecine generale",
+        "telephone": "055511200%d" % i,
+        "wilaya": "Alger",
+        "password": "Xff12345",
+    }, headers={"X-Forwarded-For": "203.0.113.%d" % i})
+    check("register XFF %d accepte" % (i + 1), r.status_code, 200)
+r = client.post("/api/cabinets/register", json={
+    "nom_medecin": "Dr Xff 9",
+    "specialite": "Medecine generale",
+    "telephone": "0555112009",
+    "wilaya": "Alger",
+    "password": "Xff12345",
+}, headers={"X-Forwarded-For": "203.0.113.99"})
+check("register XFF spoof refuse", r.status_code, 429)
+
+# --- Limite prise de tickets par IP ---
+_signup_attempts.clear()
+r = register("Dr Prise", "0555113000", "Prise1234")
+check("cabinet limite prise", r.status_code, 200)
+r = login("dr-prise", "Prise1234")
+token_prise = r.json().get("token")
+r = client.post("/api/cabinets/dr-prise/start-day", json={}, headers=auth(token_prise))
+check("start-day limite prise", r.status_code, 200)
+_take_attempts.clear()
+for i in range(30):
+    r = client.post("/api/tickets/take", json={
+        "cabinet_slug": "dr-prise",
+        "nom_patient": "Patient %d" % i,
+    })
+    if r.status_code != 200:
+        check("prise limite %d acceptee" % (i + 1), r.status_code, 200)
+        break
+else:
+    check("prises 30 acceptees", 200, 200)
+r = client.post("/api/tickets/take", json={
+    "cabinet_slug": "dr-prise",
+    "nom_patient": "Patient trop",
+})
+check("prise 31e refusee limite", r.status_code, 429)
 
 print(f"\n=== Resultat : {passed} ok, {failed} echec ===")
 if os.path.exists(POC_DB):
