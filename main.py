@@ -93,22 +93,22 @@ def email_configure() -> bool:
     return email_https_ok() or smtp_autorise()
 
 
+RESEND_FROM = "TAFWITA <beth.t@example.com>"
+
+
 def _mail_from_https() -> str:
-    # pages.dev / Gmail / example.com ne peuvent pas etre expediteur Resend.
-    # Sans domaine DNS verifie : uniquement beth.t@example.com.
+    # Resend : ignorer MAIL_FROM (example.com / pages.dev / Gmail sont refuses).
+    if os.getenv("RESEND_API_KEY"):
+        return RESEND_FROM
     brut = (os.getenv("MAIL_FROM") or "").strip()
     bas = brut.lower()
     interdit = (
         "gmail.com", "googlemail.com", "example.com", "pages.dev",
         "github.io", "http://", "https://",
     )
-    if os.getenv("RESEND_API_KEY"):
-        if "resend.dev" in bas and not any(x in bas for x in ("example.com", "pages.dev")):
-            return brut if "<" in brut else f"TAFWITA <{brut}>"
-        return "TAFWITA <beth.t@example.com>"
     if brut and "@" in brut and not any(x in bas for x in interdit):
-        return brut if "<" in brut else f"TAFWITA <{brut}>"
-    return "TAFWITA <beth.t@example.com>"
+        return brut if "<" in brut else "TAFWITA <%s>" % brut
+    return RESEND_FROM
 
 
 def _http_json(url: str, headers: dict, payload: dict) -> None:
@@ -153,7 +153,7 @@ def envoyer_email(
     try:
         if resend:
             payload = {
-                "from": _mail_from_https(),
+                "from": RESEND_FROM,
                 "to": [dest],
                 "subject": subject,
                 "text": body,
@@ -221,7 +221,7 @@ def envoyer_email(
             server.send_message(msg)
         return None
     except Exception as e:
-        return str(e)[:400]
+        return ("from=%s | %s" % (RESEND_FROM if resend else _mail_from_https(), e))[:400]
 
 
 def noter_echec_email(nom: str, email: str, detail: str) -> None:
@@ -442,6 +442,7 @@ def health():
         "status": "healthy",
         "service": "tafwita-api",
         "email_ok": email_configure(),
+        "mail_from": RESEND_FROM if email_configure() else None,
     }
 
 
