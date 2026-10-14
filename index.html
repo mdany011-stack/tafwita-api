@@ -493,7 +493,7 @@
       <button type="button" class="trial-close" id="trialClose" aria-label="Fermer">×</button>
       <div class="trial-header">
         <h2 id="trialTitle" data-i="trialTitle">Commencer l'essai gratuit</h2>
-        <p data-i="trialLead">Promotion lancement : un cabinet est cree pour 45 jours. Le mot de passe ouvre la console.</p>
+        <p data-i="trialLead">Promotion lancement : un cabinet est cree pour 45 jours. Un e-mail de confirmation part vers l adresse indiquée. Le mot de passe n y figure pas.</p>
       </div>
       <form id="trialForm">
         <div class="hp-field" aria-hidden="true">
@@ -673,7 +673,7 @@
       contactHint: "Vous pouvez aussi ecrire directement a", contactName: "Nom", contactEmail: "E-mail", contactMsg: "Message", contactSend: "Envoyer", contactOk: "Message recu. TAFWITA vous repondra.",
       contactErr: "Impossible d envoyer le message. Reessayez.",
       trialTitle: "Commencer l'essai gratuit",
-      trialLead: "Promotion lancement : un cabinet est cree pour 45 jours. Le mot de passe ouvre la console.",
+      trialLead: "Promotion lancement : un cabinet est cree pour 45 jours. Un e-mail de confirmation part vers l adresse indiquee. Le mot de passe n y figure pas.",
       lblNom: "Nom", lblPrenom: "Prenom", lblCab: "Nom du cabinet", lblTel: "Telephone", lblEmail: "E-mail",
       lblSpec: "Specialite", optSpec: "Choisir une specialite", lblWilaya: "Wilaya", optWilaya: "Choisir une wilaya",
       lblPin: "Mot de passe", lblPin2: "Confirmer le mot de passe",
@@ -681,7 +681,9 @@
       cancel: "Annuler", createTrial: "Creer l'essai",
       errRequired: "Tous les champs sont obligatoires.", errPin: "Le mot de passe doit contenir au moins 8 caracteres, une lettre et un chiffre.",
       errPinMatch: "Les mots de passe ne correspondent pas.", errSignup: "Erreur inscription",
+      errApi: "Impossible de joindre le serveur. Attendez 30 secondes puis reessayez.",
       trialOk: "Essai active. Identifiant : {slug}. Connectez-vous avec ce mot de passe. Imprimez l affiche QR depuis la console. L ecran TV s ouvre aussi depuis la console.",
+      trialOkMail: "Essai active. Identifiant : {slug}. Un e-mail de confirmation (affiche QR jointe) part vers votre adresse. Connectez-vous avec le mot de passe choisi. Imprimez aussi l affiche depuis la console.",
       trialOkConsole: "Ouvrir la console",
       pageTitle: "TAFWITA - La file d'attente medicale, simplement",
       pageDesc: "TAFWITA modernise la file d'attente des cabinets medicaux en Algerie.",
@@ -735,7 +737,7 @@
       contactHint: "You can also write directly to", contactName: "Name", contactEmail: "Email", contactMsg: "Message", contactSend: "Send", contactOk: "Message received. TAFWITA will reply.",
       contactErr: "Could not send the message. Try again.",
       trialTitle: "Start the free trial",
-      trialLead: "Launch offer: a clinic is created for 45 days. The password opens the console.",
+      trialLead: "Launch offer: a clinic is created for 45 days. A confirmation email is sent to the address you give. The password is not in that email.",
       lblNom: "Last name", lblPrenom: "First name", lblCab: "Clinic name", lblTel: "Phone", lblEmail: "Email",
       lblSpec: "Specialty", optSpec: "Choose a specialty", lblWilaya: "Wilaya", optWilaya: "Choose a wilaya",
       lblPin: "Password", lblPin2: "Confirm password",
@@ -743,7 +745,9 @@
       cancel: "Cancel", createTrial: "Create the trial",
       errRequired: "All fields are required.", errPin: "Password must have at least 8 characters, one letter and one number.",
       errPinMatch: "The passwords do not match.", errSignup: "Signup error",
+      errApi: "Cannot reach the server. Wait 30 seconds, then try again.",
       trialOk: "Trial activated. Login: {slug}. Sign in with this password. Print the QR poster from the console. The TV screen opens from there too.",
+      trialOkMail: "Trial activated. Login: {slug}. A confirmation email (QR poster attached) is sent to you. Sign in with the password you chose. You can also print the poster from the console.",
       trialOkConsole: "Open the console",
       pageTitle: "TAFWITA - Medical queue, simply",
       pageDesc: "TAFWITA modernizes the waiting line for medical clinics in Algeria.",
@@ -797,7 +801,7 @@
       contactHint: "يمكنك أيضاً الكتابة مباشرة إلى", contactName: "الاسم", contactEmail: "البريد الإلكتروني", contactMsg: "الرسالة", contactSend: "إرسال", contactOk: "تم استلام الرسالة. سترد تافويتا.",
       contactErr: "تعذّر إرسال الرسالة. أعد المحاولة.",
       trialTitle: "ابدأ التجربة المجانية",
-      trialLead: "عرض الإطلاق: تُنشأ عيادة لمدة 45 يوماً. كلمة المرور تفتح الشاشة.",
+      trialLead: "عرض الإطلاق: تُنشأ عيادة لمدة 45 يوماً. تُرسل رسالة تأكيد إلى البريد المدخل. كلمة المرور ليست في الرسالة.",
       lblNom: "اللقب", lblPrenom: "الاسم", lblCab: "اسم العيادة", lblTel: "الهاتف", lblEmail: "البريد الإلكتروني",
       lblSpec: "التخصص", optSpec: "اختر تخصصاً", lblWilaya: "الولاية", optWilaya: "اختر ولاية",
       lblPin: "كلمة المرور", lblPin2: "تأكيد كلمة المرور",
@@ -805,7 +809,9 @@
       cancel: "إلغاء", createTrial: "إنشاء التجربة",
       errRequired: "كل الحقول إلزامية.", errPin: "كلمة المرور 8 أحرف على الأقل، مع حرف ورقم.",
       errPinMatch: "كلمتا المرور غير متطابقتين.", errSignup: "خطأ في التسجيل",
+      errApi: "تعذّر الاتصال بالخادم. انتظر 30 ثانية ثم أعد المحاولة.",
       trialOk: "تم تفعيل التجربة. المعرّف : {slug}. سجّل الدخول بهذه الكلمة. اطبع ملصق QR من الكونسول. شاشة التلفاز تُفتح من هناك أيضاً.",
+      trialOkMail: "تم تفعيل التجربة. المعرّف : {slug}. تُرسل رسالة تأكيد مع ملصق QR إلى بريدك. سجّل الدخول بكلمة المرور التي اخترتها. يمكنك أيضاً طباعة الملصق من الكونسول.",
       trialOkConsole: "فتح الشاشة",
       pageTitle: "تافويتا - طابور الانتظار الطبي، ببساطة",
       pageDesc: "تافويتا يحدّث طابور انتظار العيادات الطبية في الجزائر.",
@@ -817,6 +823,36 @@
     var host = location.hostname;
     if (host === 'localhost' || host === '127.0.0.1') return 'http://127.0.0.1:8000';
     return 'https://tafwita-api.onrender.com';
+  }
+  function errReseau(err){
+    var m = String((err && err.message) || err || '');
+    if (/failed to fetch|networkerror|load failed|network request failed/i.test(m)) return tr('errApi');
+    return m || tr('errSignup');
+  }
+  async function apiPost(path, payload){
+    var last = null;
+    for (var i = 0; i < 3; i++) {
+      try {
+        var r = await fetch(apiBase() + path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        var d = await r.json().catch(function(){ return {}; });
+        var detail = d.detail;
+        if (Array.isArray(detail)) detail = (detail[0] && (detail[0].msg || detail[0].detail)) || '';
+        if (!r.ok) throw Error(detail || d.message || tr('errSignup'));
+        return d;
+      } catch (e) {
+        last = e;
+        if (i < 2 && /failed to fetch|networkerror|load failed/i.test(String(e && e.message || e))) {
+          await new Promise(function(ok){ setTimeout(ok, 4000); });
+          continue;
+        }
+        throw e;
+      }
+    }
+    throw last;
   }
   function translate(){
     document.documentElement.lang = lang === 'AR' ? 'ar' : lang.toLowerCase();
@@ -894,21 +930,13 @@
       }
       btn.disabled = true;
       try {
-        var r = await fetch(apiBase() + '/api/contact', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nom: nom, email: email, message: message, website: website })
-        });
-        var d = await r.json().catch(function(){ return {}; });
-        var detail = d.detail;
-        if (Array.isArray(detail)) detail = (detail[0] && (detail[0].msg || detail[0].detail)) || tr('contactErr');
-        if (!r.ok) throw Error(detail || d.message || tr('contactErr'));
+        await apiPost('/api/contact', { nom: nom, email: email, message: message, website: website });
         status.style.color = '#2e8b57';
         status.textContent = tr('contactOk');
         contactForm.reset();
       } catch (err) {
         status.style.color = '#c05050';
-        status.textContent = err.message || tr('contactErr');
+        status.textContent = errReseau(err) || tr('contactErr');
       } finally {
         btn.disabled = false;
       }
@@ -940,18 +968,13 @@
     p.website = document.getElementById('trialWebsite').value;
     submit.disabled = true;
     try {
-      var r = await fetch(apiBase() + '/api/trial-signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(p)
-      });
-      var d = await r.json().catch(function(){ return {}; });
-      if (!r.ok) throw Error(d.detail || d.message || tr('errSignup'));
+      var d = await apiPost('/api/trial-signup', p);
       var slug = d.cabinet_slug;
       if (!slug) throw Error(tr('errSignup'));
       msg.style.color = '#2e8b57';
       msg.textContent = '';
-      msg.appendChild(document.createTextNode(tr('trialOk').replace('{slug}', slug) + ' '));
+      var okTxt = d.email_prevu ? tr('trialOkMail') : tr('trialOk');
+      msg.appendChild(document.createTextNode(okTxt.replace('{slug}', slug) + ' '));
       var lien = document.createElement('a');
       lien.href = './cabinet.html';
       lien.textContent = tr('trialOkConsole');
@@ -959,7 +982,7 @@
       msg.appendChild(document.createTextNode('.'));
     } catch (err) {
       msg.style.color = '#c05050';
-      msg.textContent = err.message;
+      msg.textContent = errReseau(err);
     } finally {
       submit.disabled = false;
     }
