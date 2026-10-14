@@ -83,7 +83,7 @@ if("serviceWorker" in navigator){window.addEventListener("load",function(){navig
 </div>
 
 <script>
-const API=localStorage.getItem("tafwita_api")||"https://tafwita-api.onrender.com";
+const API=(location.hostname==="localhost"||location.hostname==="127.0.0.1")?"http://127.0.0.1:8000":"https://tafwita-api.onrender.com";
 const LK="tafwita_tv_language", SK="tafwita_tv_slug";
 let lang=localStorage.getItem(LK)||"FR";
 let slug=localStorage.getItem(SK)||"";
