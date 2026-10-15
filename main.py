@@ -93,7 +93,8 @@ def email_configure() -> bool:
     return email_https_ok() or smtp_autorise()
 
 
-RESEND_FROM = "TAFWITA <beth.t@example.com>"
+# Sans nom "TAFWITA <...>" : Resend prenait example.com pour le domaine.
+RESEND_FROM = "beth.t@example.com"
 
 
 def _mail_from_https() -> str:
@@ -133,6 +134,12 @@ def _http_json(url: str, headers: dict, payload: dict) -> None:
             msg = data.get("message") or data.get("name") or raw
         except json.JSONDecodeError:
             msg = raw
+        if "example.com" in str(msg) or "not verified" in str(msg).lower():
+            msg = (
+                "%s | Resend exige un domaine DNS a vous (pas pages.dev, pas example.com). "
+                "Test resend.dev : l e-mail n arrive qu a l adresse du compte Resend."
+                % msg
+            )
         raise RuntimeError("HTTP %s: %s" % (e.code, msg)) from e
 
 
@@ -157,6 +164,8 @@ def envoyer_email(
                 "to": [dest],
                 "subject": subject,
                 "text": body,
+                "html": "<pre style=\"font-family:sans-serif;white-space:pre-wrap\">%s</pre>"
+                % escape(body),
             }
             if repondre:
                 payload["reply_to"] = repondre
