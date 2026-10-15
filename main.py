@@ -81,35 +81,65 @@ def make_affiche_png(nom: str, specialite: str, url: str) -> bytes:
 
 
 def smtp_autorise() -> bool:
-    # Render gratuit bloque les ports SMTP (465/587). HTTPS (Resend/Brevo) reste possible.
+    # Render gratuit bloque les ports SMTP (465/587). HTTPS (Brevo/Resend) reste possible.
     return os.getenv("SMTP_ENABLED", "").strip().lower() in ("1", "true", "oui", "yes")
 
 
 def email_https_ok() -> bool:
-    return bool(os.getenv("RESEND_API_KEY") or os.getenv("BREVO_API_KEY"))
+    return bool(os.getenv("BREVO_API_KEY") or os.getenv("RESEND_API_KEY"))
 
 
 def email_configure() -> bool:
     return email_https_ok() or smtp_autorise()
 
 
-# Sans nom "TAFWITA <...>" : Resend prenait example.com pour le domaine.
+def email_via() -> Optional[str]:
+    if (os.getenv("BREVO_API_KEY") or "").strip():
+        return "brevo"
+    if (os.getenv("RESEND_API_KEY") or "").strip():
+        return "resend"
+    if smtp_autorise():
+        return "smtp"
+    return None
+
+
+# Resend (repli) : sans nom d'affichage, sinon erreur example.com.
 RESEND_FROM = "beth.t@example.com"
 
 
-def _mail_from_https() -> str:
-    # Resend : ignorer MAIL_FROM (example.com / pages.dev / Gmail sont refuses).
-    if os.getenv("RESEND_API_KEY"):
-        return RESEND_FROM
+def _parse_expediteur(brut: str) -> tuple:
+    texte = (brut or "").strip()
+    if "<" in texte and ">" in texte:
+        nom = texte.split("<", 1)[0].strip() or "TAFWITA"
+        mail = texte.split("<", 1)[1].rstrip(">").strip()
+        return nom, mail
+    return "TAFWITA", texte
+
+
+def _mail_from_brevo() -> tuple:
+    # Brevo : Gmail confirme comme expediteur. Pas pages.dev / example.com.
     brut = (os.getenv("MAIL_FROM") or "").strip()
-    bas = brut.lower()
-    interdit = (
-        "gmail.com", "googlemail.com", "example.com", "pages.dev",
-        "github.io", "http://", "https://",
-    )
-    if brut and "@" in brut and not any(x in bas for x in interdit):
-        return brut if "<" in brut else "TAFWITA <%s>" % brut
-    return RESEND_FROM
+    nom, mail = _parse_expediteur(brut)
+    bas = mail.lower()
+    if not mail or "@" not in mail:
+        raise ValueError(
+            "MAIL_FROM obligatoire pour Brevo (ex. TAFWITA <mdany011@gmail.com>)."
+        )
+    if any(x in bas for x in ("example.com", "pages.dev", "github.io", "http://", "https://")):
+        raise ValueError("MAIL_FROM invalide pour Brevo (pas pages.dev ni example.com).")
+    return nom, mail
+
+
+def _mail_from_https() -> str:
+    if email_via() == "brevo":
+        try:
+            nom, mail = _mail_from_brevo()
+            return "%s <%s>" % (nom, mail)
+        except ValueError:
+            return (os.getenv("MAIL_FROM") or "").strip() or "MAIL_FROM manquant"
+    if email_via() == "resend":
+        return RESEND_FROM
+    return (os.getenv("MAIL_FROM") or "").strip() or RESEND_FROM
 
 
 def _http_json(url: str, headers: dict, payload: dict) -> None:
@@ -127,7 +157,7 @@ def _http_json(url: str, headers: dict, payload: dict) -> None:
         raw = e.read().decode("utf-8", "replace")[:800]
         if "1010" in raw:
             raise RuntimeError(
-                "Cloudflare 1010 : requete bloquee vers Resend."
+                "Cloudflare 1010 : requete HTTPS bloquee."
             ) from e
         try:
             data = json.loads(raw)
@@ -158,6 +188,31 @@ def envoyer_email(
     brevo = (os.getenv("BREVO_API_KEY") or "").strip()
     repondre = (reply_to or "").strip() or None
     try:
+        if brevo:
+            nom_exp, mail_exp = _mail_from_brevo()
+            payload = {
+                "sender": {"name": nom_exp, "email": mail_exp},
+                "to": [{"email": dest}],
+                "subject": subject,
+                "textContent": body,
+                "htmlContent": (
+                    "<pre style=\"font-family:sans-serif;white-space:pre-wrap\">%s</pre>"
+                    % escape(body)
+                ),
+            }
+            if repondre:
+                payload["replyTo"] = {"email": repondre}
+            if png_bytes:
+                payload["attachment"] = [{
+                    "name": png_name,
+                    "content": base64.b64encode(png_bytes).decode("ascii"),
+                }]
+            _http_json(
+                "https://api.brevo.com/v3/smtp/email",
+                {"api-key": brevo, "accept": "application/json"},
+                payload,
+            )
+            return None
         if resend:
             payload = {
                 "from": RESEND_FROM,
@@ -180,34 +235,8 @@ def envoyer_email(
                 payload,
             )
             return None
-        if brevo:
-            expediteur = _mail_from_https()
-            if "<" in expediteur and ">" in expediteur:
-                nom_exp = expediteur.split("<", 1)[0].strip() or "TAFWITA"
-                mail_exp = expediteur.split("<", 1)[1].rstrip(">").strip()
-            else:
-                nom_exp, mail_exp = "TAFWITA", expediteur
-            payload = {
-                "sender": {"name": nom_exp, "email": mail_exp},
-                "to": [{"email": dest}],
-                "subject": subject,
-                "textContent": body,
-            }
-            if repondre:
-                payload["replyTo"] = {"email": repondre}
-            if png_bytes:
-                payload["attachment"] = [{
-                    "name": png_name,
-                    "content": base64.b64encode(png_bytes).decode("ascii"),
-                }]
-            _http_json(
-                "https://api.brevo.com/v3/smtp/email",
-                {"api-key": brevo, "accept": "application/json"},
-                payload,
-            )
-            return None
         if not smtp_autorise():
-            return "aucun service e-mail configure (RESEND_API_KEY)"
+            return "aucun service e-mail configure (BREVO_API_KEY)"
         smtp_host = os.getenv("SMTP_HOST")
         smtp_user = os.getenv("SMTP_USER")
         smtp_pass = os.getenv("SMTP_PASS")
@@ -230,7 +259,7 @@ def envoyer_email(
             server.send_message(msg)
         return None
     except Exception as e:
-        return ("from=%s | %s" % (RESEND_FROM if resend else _mail_from_https(), e))[:400]
+        return ("via=%s from=%s | %s" % (email_via() or "aucun", _mail_from_https(), e))[:400]
 
 
 def noter_echec_email(nom: str, email: str, detail: str) -> None:
@@ -264,7 +293,7 @@ def send_trial_welcome_email(to_email: str, slug: str, nom: str, specialite: str
         "TAFWITA"
     )
     if not email_configure():
-        noter_echec_email(nom, to_email, "RESEND_API_KEY absent sur le serveur")
+        noter_echec_email(nom, to_email, "BREVO_API_KEY absent sur le serveur")
         return
     png = None
     try:
@@ -451,7 +480,8 @@ def health():
         "status": "healthy",
         "service": "tafwita-api",
         "email_ok": email_configure(),
-        "mail_from": RESEND_FROM if email_configure() else None,
+        "email_via": email_via(),
+        "mail_from": _mail_from_https() if email_configure() else None,
     }
 
 
