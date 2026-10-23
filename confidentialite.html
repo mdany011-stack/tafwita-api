@@ -29,6 +29,9 @@
       <nav>
         <a href="./index.html">Accueil</a>
         <a href="./mentions.html">Mentions legales</a>
+        <a href="./cgu.html">CGU</a>
+        <a href="./sous-traitance.html">Sous-traitance</a>
+        <a href="./demarches.html">Demarches 18-07</a>
         <a href="mailto:tafwitacontact@gmail.com">Contact</a>
       </nav>
     </div>
@@ -36,22 +39,54 @@
   <main>
     <div class="wrap">
       <h1>Confidentialite</h1>
-      <p>TAFWITA traite des donnees pour faire fonctionner une file d'attente medicale. Ce texte decrit ce qui est collecte, pourquoi, et ce qui n'est jamais affiche en public. En Algerie, la loi n° 18-07 encadre la protection des donnees a caractere personnel.</p>
+      <p>TAFWITA traite des donnees pour faire fonctionner une file d'attente medicale. En Algerie, la loi n° 18-07 (modifiee notamment par la loi n° 25-11) encadre la protection des donnees a caractere personnel. Ce texte decrit ce qui est collecte, pourquoi, ou cela est heberge, et combien de temps. TAFWITA ne pretend pas etre « 100 % conforme » tant qu'un dossier ANPDP n'a pas recu de recipisse.</p>
+
+      <h2>Qui est responsable</h2>
+      <ul>
+        <li>Pour l'inscription d'un cabinet (essai), le contact et les comptes : TAFWITA est responsable du traitement.</li>
+        <li>Pour le nom et le telephone d'un patient dans la file : le cabinet medical est responsable. TAFWITA est sous-traitant (voir l'<a href="./sous-traitance.html">acte de sous-traitance</a>).</li>
+      </ul>
+      <p>Editeur : auto-entrepreneur ANAE (identite a completer). Contact : <a href="mailto:tafwitacontact@gmail.com">tafwitacontact@gmail.com</a>.</p>
+
       <h2>Donnees du cabinet</h2>
-      <p>A l'inscription (essai ou abonnement) : nom, prenom, nom du cabinet, telephone, e-mail, specialite, wilaya. Le mot de passe est stocke sous forme hachee, jamais en clair.</p>
-      <h2>Donnees des patients</h2>
-      <p>Le nom et le telephone d'un patient sont des donnees de sante. Ils servent uniquement a la file du cabinet. Ils n'apparaissent jamais sur l'ecran TV, le suivi public du ticket, ni la liste des cabinets.</p>
+      <p>A l'inscription (essai ou abonnement) : nom, prenom, nom du cabinet, telephone, e-mail, specialite, wilaya. Le mot de passe est stocke sous forme hachee, jamais en clair, jamais dans l'e-mail. L'e-mail d'essai est conserve dans un ticket interne de suivi, pas dans la fiche cabinet.</p>
+      <p>Des adresses IP sont utilisees uniquement pour limiter les abus (inscriptions, contact, prise de tickets, tentatives de mot de passe). Elles ne sont pas ecrites en base ; elles restent en memoire le temps du limiteur et peuvent etre vues par l'admin TAFWITA.</p>
+
+      <h2>Donnees des patients (file du cabinet)</h2>
+      <p>Le nom et le telephone optionnel d'un patient sont des donnees personnelles collectees dans un cabinet medical, pour appeler la personne dans la file. TAFWITA n'est pas un dossier medical : pas de diagnostic, pas d'ordonnance, pas d'historique clinique.</p>
+      <p>Ces informations ne sont pas enregistrees dans la base SQL. Elles restent en memoire du serveur le temps de la journee, et sur l'appareil du cabinet ou du patient (stockage local). Elles n'apparaissent jamais sur l'ecran TV, le suivi public du ticket, ni la liste des cabinets.</p>
+      <p>Un motif d'urgence eventuel n'est pas conserve en texte libre : seul un libelle generique (« demande de priorite » / « priorite medicale validee par le cabinet ») est journalise.</p>
+
       <h2>Ce qui est public</h2>
       <ul>
         <li>Nom du cabinet, specialite, wilaya et horaires pour la recherche patient.</li>
         <li>Numeros de ticket (sans nom) sur l'ecran TV et le suivi.</li>
       </ul>
+
+      <h2>Hebergeurs et transfert hors d'Algerie</h2>
+      <p>Aujourd'hui, des donnees personnelles sortent d'Algerie :</p>
+      <ul>
+        <li>Render (Etats-Unis) : API et base (comptes cabinets, tickets sans noms, evenements).</li>
+        <li>Cloudflare Pages (Etats-Unis / reseau mondial) : pages du site, dont tafwita.pages.dev.</li>
+        <li>Brevo (Union europeenne) : e-mail d'inscription (identifiant cabinet, lien QR).</li>
+        <li>Google / Gmail (Etats-Unis) : boite de contact tafwitacontact@gmail.com.</li>
+      </ul>
+      <p>Ce transfert n'est pas encore autorise par l'ANPDP. En vous inscrivant ou en prenant un ticket, vous en etes informes. Le dossier de demande figure dans <a href="./demarches.html">Demarches 18-07</a> et le <a href="./anpdp-dossier.html">modele de dossier</a>.</p>
+
       <h2>Conservation</h2>
-      <p>Les informations du cabinet restent le temps de l'essai ou de l'abonnement, puis selon le besoin de gestion du service. Les tickets de la journee sont geres pour le deroulement de la file.</p>
+      <ul>
+        <li>Compte cabinet : duree de l'essai (45 jours) puis de l'abonnement, et jusqu'a 12 mois apres cloture pour la gestion du service, sauf suppression demandee plus tot.</li>
+        <li>Tickets du jour et noms/telephones en memoire : effaces a la cloture de la journee (et au demarrage d'une nouvelle journee).</li>
+        <li>Messages de contact et traces d'inscription : 12 mois, puis suppression, sauf obligation legale.</li>
+        <li>Le cabinet peut exporter ou supprimer son compte depuis la console (Horaires).</li>
+      </ul>
+
       <h2>Vos droits</h2>
-      <p>Vous pouvez demander l'acces, la correction ou la suppression des donnees du cabinet. Ecrivez a <a href="mailto:tafwitacontact@gmail.com">tafwitacontact@gmail.com</a>.</p>
+      <p>Cabinet : acces, correction, export et suppression du compte depuis la console, ou par e-mail a <a href="mailto:tafwitacontact@gmail.com">tafwitacontact@gmail.com</a>.</p>
+      <p>Patient : le nom et le telephone de file disparaissent a la cloture de la journee. Pour une correction le jour meme, adressez-vous au cabinet (responsable de ces donnees).</p>
+
       <h2>E-mails</h2>
-      <p>L'adresse e-mail sert a vous recontacter. L'affiche QR s'imprime depuis la console. TAFWITA n'utilise pas cette adresse pour de la publicite tierce.</p>
+      <p>A l'inscription, un e-mail automatique rappelle l'identifiant du cabinet et joint l'affiche QR. Le mot de passe n'est jamais envoye par e-mail. L'affiche s'imprime aussi depuis la console. TAFWITA n'utilise pas cette adresse pour de la publicite tierce.</p>
     </div>
   </main>
 </body>
