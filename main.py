@@ -481,7 +481,6 @@ def health():
         "service": "tafwita-api",
         "email_ok": email_configure(),
         "email_via": email_via(),
-        "mail_from": _mail_from_https() if email_configure() else None,
     }
 
 
@@ -493,6 +492,10 @@ _PAGES_PUBLIQUES = {
     "admin.html": "text/html; charset=utf-8",
     "mentions.html": "text/html; charset=utf-8",
     "confidentialite.html": "text/html; charset=utf-8",
+    "cgu.html": "text/html; charset=utf-8",
+    "sous-traitance.html": "text/html; charset=utf-8",
+    "demarches.html": "text/html; charset=utf-8",
+    "anpdp-dossier.html": "text/html; charset=utf-8",
     "service-worker.js": "application/javascript; charset=utf-8",
     "manifest.webmanifest": "application/manifest+json",
     "manifest-cabinet.webmanifest": "application/manifest+json",
@@ -516,6 +519,10 @@ def servir_page_publique(nom: str):
 @app.get("/admin.html")
 @app.get("/mentions.html")
 @app.get("/confidentialite.html")
+@app.get("/cgu.html")
+@app.get("/sous-traitance.html")
+@app.get("/demarches.html")
+@app.get("/anpdp-dossier.html")
 @app.get("/service-worker.js")
 @app.get("/manifest.webmanifest")
 @app.get("/manifest-cabinet.webmanifest")
@@ -891,6 +898,42 @@ def pii_ram(ticket_id: int) -> dict:
     return _pii_ephemere.get(ticket_id) or {}
 
 
+def oublier_pii(*ticket_ids) -> None:
+    for i in ticket_ids:
+        if i is not None:
+            _pii_ephemere.pop(int(i), None)
+
+
+def oublier_pii_cabinet(db: Session, slug: str) -> None:
+    ids = [
+        row[0]
+        for row in db.query(PatientTicket.id).filter(PatientTicket.cabinet_slug == slug).all()
+    ]
+    oublier_pii(*ids)
+
+
+NOTES_EVENEMENT_GENERIQUES = {
+    "urgent_approved": "Priorite medicale validee par le cabinet",
+    "urgent_requested": "Demande de priorite",
+}
+
+
+def note_evenement(event_type: str, reason_note: Optional[str] = None) -> Optional[str]:
+    if event_type in NOTES_EVENEMENT_GENERIQUES:
+        return NOTES_EVENEMENT_GENERIQUES[event_type]
+    texte = (reason_note or "").strip()
+    return texte[:80] or None
+
+
+def exiger_consentement(valeur) -> None:
+    if valeur is True:
+        return
+    raise HTTPException(
+        status_code=400,
+        detail="Veuillez accepter la politique de confidentialite.",
+    )
+
+
 def ticket_public_dict(t: PatientTicket) -> dict:
     d = ticket_to_dict(t)
     d["nom_patient"] = None
@@ -926,8 +969,30 @@ def annuler_tickets_ouverts(db: Session, slug: str, event_type: str, reason_note
 
 
 def log_event(db: Session, ticket_id: int, event_type: str, reason_note: Optional[str] = None):
-    db.add(TicketEvent(ticket_id=ticket_id, event_type=event_type, reason_note=reason_note))
+    db.add(TicketEvent(
+        ticket_id=ticket_id,
+        event_type=event_type,
+        reason_note=note_evenement(event_type, reason_note),
+    ))
     db.commit()
+
+
+def traces_support_cabinet(db: Session, slug: str):
+    motif = "Identifiant : " + slug
+    return db.query(SupportTicket).filter(SupportTicket.message.contains(motif))
+
+
+def supprimer_donnees_cabinet(db: Session, cabinet: Cabinet) -> None:
+    slug = cabinet.slug
+    oublier_pii_cabinet(db, slug)
+    tickets = db.query(PatientTicket).filter(PatientTicket.cabinet_slug == slug).all()
+    ids = [t.id for t in tickets]
+    if ids:
+        db.query(TicketEvent).filter(TicketEvent.ticket_id.in_(ids)).delete(synchronize_session=False)
+    db.query(PatientTicket).filter(PatientTicket.cabinet_slug == slug).delete(synchronize_session=False)
+    db.query(CabinetSession).filter(CabinetSession.cabinet_slug == slug).delete(synchronize_session=False)
+    traces_support_cabinet(db, slug).delete(synchronize_session=False)
+    db.delete(cabinet)
 
 
 def ticket_to_dict(t: PatientTicket) -> dict:
@@ -981,6 +1046,7 @@ class TrialSignup(BaseModel):
     wilaya: str
     password: str
     website: Optional[str] = None
+    accepte_politique: bool = False
 
 
 class PinCheck(BaseModel):
@@ -997,6 +1063,7 @@ class PatientTicketCreate(BaseModel):
     cabinet_slug: str
     nom_patient: str
     telephone: Optional[str] = None
+    accepte_politique: bool = False
 
 
 class ManualTicketCreate(PatientTicketCreate):
@@ -1053,6 +1120,17 @@ class ContactPublic(BaseModel):
     email: str
     message: str
     website: Optional[str] = None
+    accepte_politique: bool = False
+
+
+class ResetPasswordAsk(BaseModel):
+    slug: str
+    telephone: str
+    website: Optional[str] = None
+
+
+class AdminPasswordSet(BaseModel):
+    password: str
 
 
 class SupportStatut(BaseModel):
@@ -1107,6 +1185,7 @@ def register_cabinet(data: CabinetRegister, request: Request, db: Session = Depe
 def trial_signup(data: TrialSignup, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if (data.website or "").strip():
         raise HTTPException(status_code=400, detail="Demande invalide.")
+    exiger_consentement(data.accepte_politique)
     ip = client_ip(request)
     verifier_limite_inscription(ip)
     noter_inscription(ip)
@@ -1162,6 +1241,7 @@ def trial_signup(data: TrialSignup, request: Request, background_tasks: Backgrou
 def contact_public(data: ContactPublic, request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     if (data.website or "").strip():
         raise HTTPException(status_code=400, detail="Demande invalide.")
+    exiger_consentement(data.accepte_politique)
     nom = (data.nom or "").strip()
     email = (data.email or "").strip()
     message = (data.message or "").strip()
@@ -1237,6 +1317,9 @@ button:disabled{{opacity:.5}}
 .num{{font-size:48px;font-weight:900;color:#237873;text-align:center;margin:12px 0}}
 .ok{{background:#e4f5ee;color:#2c8b69;border-radius:12px;padding:12px;text-align:center}}
 .warn{{background:#fff4de;color:#755714;border-radius:12px;padding:12px}}
+.consent{{display:flex;gap:10px;align-items:flex-start;margin:16px 0 0;font-size:13px;color:#607078;line-height:1.45}}
+.consent input{{margin-top:3px;flex:0 0 auto}}
+.consent a{{color:#237873}}
 </style></head>
 <body data-slug="{slug}" data-ouvert="{etat}">
 <div class="box">
@@ -1253,15 +1336,16 @@ function saved(){{try{{return JSON.parse(localStorage.getItem(K)||"null")}}catch
 async function j(r){{try{{return await r.json()}}catch(e){{return {{}}}}}}
 function form(){{
   if(!ouvert){{panel('<div class="warn">La prise de tickets n est pas disponible actuellement.</div>');return;}}
-  panel('<label>Votre nom complet</label><input id="n" placeholder="Ex : Farid Cherif" required><label>Telephone (optionnel)</label><input id="t" placeholder="Ex : 0555 66 55 99"><button id="go" type="button">Prendre mon ticket</button><p class="msg" id="m"></p>');
+  panel('<label>Votre nom complet</label><input id="n" placeholder="Ex : Farid Cherif" required><label>Telephone (optionnel)</label><input id="t" placeholder="Ex : 0555 66 55 99"><label class="consent"><input id="ok" type="checkbox"><span>J accepte la <a href="/confidentialite.html" target="_blank" rel="noopener">politique de confidentialite</a>. Nom et telephone servent a la file du cabinet. Des donnees peuvent etre hebergees hors d Algerie (Render, Cloudflare).</span></label><button id="go" type="button">Prendre mon ticket</button><p class="msg" id="m"></p>');
   document.getElementById("go").onclick=take;
 }}
 async function take(){{
   const n=document.getElementById("n").value.trim(), t=document.getElementById("t").value.trim(), b=document.getElementById("go"), m=document.getElementById("m");
   if(!n){{m.textContent="Le nom est obligatoire.";return;}}
+  if(!document.getElementById("ok").checked){{m.textContent="Veuillez accepter la politique de confidentialite.";return;}}
   b.disabled=true;m.textContent="";
   try{{
-    const r=await fetch("/api/tickets/take",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{cabinet_slug:slug,nom_patient:n,telephone:t||null}})}});
+    const r=await fetch("/api/tickets/take",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{cabinet_slug:slug,nom_patient:n,telephone:t||null,accepte_politique:true}})}});
     const d=await j(r);
     if(!r.ok)throw Error(d.detail||"Erreur");
     const rec={{id:d.ticket.id,token:d.suivi_token,num:d.ticket.ticket_num,nom:n,tel:t||null}};
@@ -1301,6 +1385,7 @@ def page_prise_qr(slug: str, db: Session = Depends(get_db)):
 # D. PRENDRE UN TICKET (patient)
 @app.post("/api/tickets/take")
 def take_ticket(data: PatientTicketCreate, request: Request, db: Session = Depends(get_db)):
+    exiger_consentement(data.accepte_politique)
     ip = client_ip(request)
     verifier_limite_prise(ip)
     if not (data.nom_patient or "").strip():
@@ -1376,7 +1461,7 @@ def ticket_events(
         {
             "id": e.id,
             "event_type": e.event_type,
-            "reason_note": e.reason_note,
+            "reason_note": note_evenement(e.event_type, e.reason_note),
             "created_at": e.created_at.isoformat() if e.created_at else None,
         }
         for e in events
@@ -1439,6 +1524,39 @@ def verify_pin(slug: str, body: PinCheck, request: Request, db: Session = Depend
         "cabinet_nom": cabinet.nom_medecin,
         "token": token,
         "expires_at": expire.isoformat(),
+    }
+
+
+@app.post("/api/cabinets/reset-password")
+def demander_reset_mot_de_passe(
+    data: ResetPasswordAsk,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    if (data.website or "").strip():
+        raise HTTPException(status_code=400, detail="Demande invalide.")
+    ip = client_ip(request)
+    verifier_limite_contact(ip)
+    noter_contact(ip)
+    slug = slugifier(data.slug)
+    tel = "".join(ch for ch in (data.telephone or "") if ch.isdigit())
+    cab = db.query(Cabinet).filter(Cabinet.slug == slug).first()
+    tel_cab = "".join(ch for ch in (cab.telephone or "") if ch.isdigit()) if cab else ""
+    if cab and tel and secrets_egaux(tel_cab, tel):
+        db.add(SupportTicket(
+            nom=cab.nom_medecin or slug,
+            email=None,
+            sujet="Mot de passe oublie",
+            message=(
+                f"Identifiant : {cab.slug}\n"
+                f"Telephone : {cab.telephone}\n"
+                f"Wilaya : {cab.wilaya}"
+            ),
+        ))
+        db.commit()
+    return {
+        "status": "success",
+        "message": "Si ce cabinet existe, TAFWITA a recu la demande.",
     }
 
 
@@ -1587,6 +1705,7 @@ def start_day(
     cabinet = authentifier_cabinet(db, slug, request, authorization, secret_depuis_body(body))
     exiger_abonnement(cabinet)
     annuler_tickets_ouverts(db, cabinet.slug, "start_day_cancel")
+    oublier_pii_cabinet(db, cabinet.slug)
     cabinet.day_closed = False
     cabinet.accept_tickets = True
     cabinet.serving_num = 0
@@ -1614,6 +1733,7 @@ def close_day(
         t.statut = "cancelled"
         log_event(db, t.id, "day_closed_cancel", body.reason)
 
+    oublier_pii_cabinet(db, cabinet.slug)
     cabinet.day_closed = True
     cabinet.accept_tickets = False
     db.commit()
@@ -1636,6 +1756,56 @@ def update_settings(
         setattr(cabinet, key, value)
     db.commit()
     return {"status": "success", "message": "Parametres mis a jour."}
+
+
+@app.get("/api/cabinets/{slug}/export")
+def export_cabinet(
+    slug: str,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    cabinet = authentifier_cabinet(db, slug, request, authorization)
+    tickets = (
+        db.query(PatientTicket)
+        .filter(PatientTicket.cabinet_slug == cabinet.slug)
+        .order_by(PatientTicket.id.asc())
+        .all()
+    )
+    return {
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "cabinet": {
+            "slug": cabinet.slug,
+            "nom_medecin": cabinet.nom_medecin,
+            "specialite": cabinet.specialite,
+            "telephone": cabinet.telephone,
+            "wilaya": cabinet.wilaya,
+            "subscription_type": cabinet.subscription_type,
+            "subscription_end": (
+                cabinet.subscription_end.strftime("%Y-%m-%d") if cabinet.subscription_end else None
+            ),
+            "ticket_mode": cabinet.ticket_mode,
+            "ticket_start_time": cabinet.ticket_start_time,
+            "ticket_end_time": cabinet.ticket_end_time,
+            "opening_time": cabinet.opening_time,
+            "closing_time": cabinet.closing_time,
+            "max_tickets_per_day": cabinet.max_tickets_per_day,
+        },
+        "tickets": [ticket_public_dict(t) for t in tickets],
+    }
+
+
+@app.delete("/api/cabinets/{slug}/account")
+def delete_own_account(
+    slug: str,
+    request: Request,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    cabinet = authentifier_cabinet(db, slug, request, authorization)
+    supprimer_donnees_cabinet(db, cabinet)
+    db.commit()
+    return {"status": "success", "message": "Compte cabinet et traces associees supprimes."}
 
 
 # Q. ETAT EN DIRECT DE LA FILE (utilise par TV, patient et desktop)
@@ -1806,19 +1976,29 @@ def admin_update_subscription(cabinet_id: int, data: SubscriptionUpdate, db: Ses
     }
 
 
+@app.post("/api/admin/cabinets/{cabinet_id}/password")
+def admin_set_password(
+    cabinet_id: int,
+    data: AdminPasswordSet,
+    db: Session = Depends(get_db),
+    auth: bool = Depends(check_admin),
+):
+    cabinet = db.query(Cabinet).filter(Cabinet.id == cabinet_id).first()
+    if not cabinet:
+        raise HTTPException(status_code=404, detail="Cabinet introuvable.")
+    secret = valider_mot_de_passe(data.password)
+    cabinet.code_pin = hash_pin(secret)
+    db.query(CabinetSession).filter(CabinetSession.cabinet_slug == cabinet.slug).delete()
+    db.commit()
+    return {"status": "success", "message": "Mot de passe mis a jour. Les sessions sont invalidees."}
+
+
 @app.delete("/api/admin/cabinets/{cabinet_id}")
 def admin_delete_cabinet(cabinet_id: int, db: Session = Depends(get_db), auth: bool = Depends(check_admin)):
     cabinet = db.query(Cabinet).filter(Cabinet.id == cabinet_id).first()
     if not cabinet:
         raise HTTPException(status_code=404, detail="Cabinet introuvable.")
-    slug = cabinet.slug
-    tickets = db.query(PatientTicket).filter(PatientTicket.cabinet_slug == slug).all()
-    ids = [t.id for t in tickets]
-    if ids:
-        db.query(TicketEvent).filter(TicketEvent.ticket_id.in_(ids)).delete(synchronize_session=False)
-    db.query(PatientTicket).filter(PatientTicket.cabinet_slug == slug).delete(synchronize_session=False)
-    db.query(CabinetSession).filter(CabinetSession.cabinet_slug == slug).delete(synchronize_session=False)
-    db.delete(cabinet)
+    supprimer_donnees_cabinet(db, cabinet)
     db.commit()
     return {"status": "success", "message": "Cabinet supprime."}
 
