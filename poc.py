@@ -10,6 +10,9 @@ from datetime import datetime, timedelta
 POC_DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "poc_test.db")
 os.environ["DATABASE_URL"] = "sqlite:///" + POC_DB.replace("\\", "/")
 os.environ["ADMIN_TOKEN"] = "poc-admin-token-not-for-prod-123456"
+os.environ["SMTP_ENABLED"] = "0"
+os.environ.pop("RESEND_API_KEY", None)
+os.environ.pop("BREVO_API_KEY", None)
 
 if os.path.exists(POC_DB):
     os.remove(POC_DB)
@@ -25,7 +28,11 @@ from main import (
     _signup_attempts,
     _contact_attempts,
     _take_attempts,
+    _pii_ephemere,
     est_hash_bcrypt,
+    email_configure,
+    email_via,
+    send_trial_welcome_email,
 )
 
 client = TestClient(app)
@@ -68,6 +75,13 @@ def login(slug, password):
 
 def auth(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+def take(slug, nom, tel=None, accepte=True):
+    body = {"cabinet_slug": slug, "nom_patient": nom, "accepte_politique": accepte}
+    if tel is not None:
+        body["telephone"] = tel
+    return client.post("/api/tickets/take", json=body)
 
 
 def pin_en_base(slug):
@@ -161,16 +175,9 @@ check("historique sans jeton", r.status_code, 401)
 r = client.post("/api/cabinets/dr-alpha/start-day", json={}, headers=auth(token_a))
 check("start-day avec jeton", r.status_code, 200)
 
-r = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-alpha",
-    "nom_patient": "Farid Patient",
-    "telephone": "0555111222",
-})
+r = take("dr-alpha", "Farid Patient", "0555111222")
 check("prise de ticket patient (public)", r.status_code, 200)
-r_vide = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-alpha",
-    "nom_patient": "   ",
-})
+r_vide = take("dr-alpha", "   ")
 check("prise sans nom refusee", r_vide.status_code, 400)
 ticket_a = r.json()["ticket"]
 tid_a = ticket_a["id"]
@@ -213,10 +220,7 @@ check_true("add-manual rend un jeton de suivi", bool(r.json().get("suivi_token")
 # --- Isolation inter-cabinets ---
 r = client.post("/api/cabinets/dr-beta/start-day", json={}, headers=auth(token_b))
 check("start-day B", r.status_code, 200)
-r = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-beta",
-    "nom_patient": "Patient Beta",
-})
+r = take("dr-beta", "Patient Beta")
 tid_b = r.json()["ticket"]["id"]
 
 r = client.post(f"/api/tickets/{tid_b}/notify", headers=auth(token_a))
@@ -232,10 +236,7 @@ check("jeton A sur slug B", r.status_code, 403)
 r = client.post("/api/cabinets/dr-legacy/start-day", json={"password": "111111"})
 check("start-day compat mot de passe body", r.status_code, 200)
 
-r = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-legacy",
-    "nom_patient": "Patient Legacy",
-})
+r = take("dr-legacy", "Patient Legacy")
 tid_l = r.json()["ticket"]["id"]
 suivi_l = r.json().get("suivi_token")
 
@@ -299,9 +300,9 @@ r = register("Dr Urgent", "0555000005", "Urgent123")
 check("inscription cabinet urgent", r.status_code, 200)
 token_u = login("dr-urgent", "Urgent123").json()["token"]
 client.post("/api/cabinets/dr-urgent/start-day", json={}, headers=auth(token_u))
-r = client.post("/api/tickets/take", json={"cabinet_slug": "dr-urgent", "nom_patient": "Farid"})
+r = take("dr-urgent", "Farid")
 tid_farid = r.json()["ticket"]["id"]
-r = client.post("/api/tickets/take", json={"cabinet_slug": "dr-urgent", "nom_patient": "Karim"})
+r = take("dr-urgent", "Karim")
 tid_karim = r.json()["ticket"]["id"]
 suivi_karim = r.json()["suivi_token"]
 
@@ -321,9 +322,9 @@ check("next sans approbation ticket", r.json().get("ticket_id"), tid_farid)
 r = register("Dr Prio", "0555000006", "Prio12345")
 token_p = login("dr-prio", "Prio12345").json()["token"]
 client.post("/api/cabinets/dr-prio/start-day", json={}, headers=auth(token_p))
-r = client.post("/api/tickets/take", json={"cabinet_slug": "dr-prio", "nom_patient": "Farid"})
+r = take("dr-prio", "Farid")
 tid_p_farid = r.json()["ticket"]["id"]
-r = client.post("/api/tickets/take", json={"cabinet_slug": "dr-prio", "nom_patient": "Karim"})
+r = take("dr-prio", "Karim")
 tid_p_karim = r.json()["ticket"]["id"]
 suivi_p_karim = r.json()["suivi_token"]
 client.post(
@@ -338,6 +339,15 @@ r = client.post(
 )
 check("approve-urgent", r.status_code, 200)
 check("approve-urgent statut", r.json()["ticket"]["statut"], "urgent")
+r = client.get(
+    f"/api/tickets/{tid_p_karim}/events",
+    headers={"X-Suivi-Token": suivi_p_karim},
+)
+blob_ev = str(r.json()).lower()
+check_true(
+    "events suivi sans motif medical",
+    "valide par le medecin" not in blob_ev and "douleur" not in blob_ev,
+)
 r = client.post("/api/queue/dr-prio/next", headers=auth(token_p))
 check("next priorise l urgence approuvee", r.json().get("ticket_id"), tid_p_karim)
 
@@ -346,10 +356,7 @@ r = client.post("/api/cabinets/dr-alpha/start-day", json={}, headers=auth(token_
 check("start-day reset", r.status_code, 200)
 r = client.get(f"/api/tickets/{tid_a}/patient", headers={"X-Suivi-Token": suivi_a})
 check("start-day annule l ancien ticket", r.json()["ticket"]["statut"], "cancelled")
-r = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-alpha",
-    "nom_patient": "Nouveau Jour",
-})
+r = take("dr-alpha", "Nouveau Jour")
 check("nouveau ticket apres start-day", r.status_code, 200)
 check("nouveau ticket est P-01", r.json()["ticket"]["ticket_num"], 1)
 suivi_nouveau = r.json().get("suivi_token")
@@ -361,10 +368,7 @@ r = client.put("/api/cabinets/dr-alpha/settings", json={
     "ticket_end_time": "23:59",
 }, headers=auth(token_a))
 check("reglage horaire fixed", r.status_code, 200)
-r = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-alpha",
-    "nom_patient": "Hors Horaire",
-})
+r = take("dr-alpha", "Hors Horaire")
 check("take hors horaire fixed", r.status_code, 400)
 client.put("/api/cabinets/dr-alpha/settings", json={
     "ticket_mode": "manual",
@@ -378,10 +382,7 @@ cab = db.query(Cabinet).filter(Cabinet.slug == "dr-alpha").first()
 cab.subscription_end = datetime.utcnow() - timedelta(days=1)
 db.commit()
 db.close()
-r = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-alpha",
-    "nom_patient": "Essai Expire",
-})
+r = take("dr-alpha", "Essai Expire")
 check("take abonnement expire", r.status_code, 403)
 db = SessionLocal()
 cab = db.query(Cabinet).filter(Cabinet.slug == "dr-alpha").first()
@@ -463,6 +464,7 @@ def essai_corps(tel, website="", cabinet=None):
         "wilaya": "Alger",
         "password": "Essai1234",
         "website": website,
+        "accepte_politique": True,
     }
 
 _signup_attempts.clear()
@@ -479,8 +481,33 @@ _signup_attempts.clear()
 for i in range(3):
     r = client.post("/api/trial-signup", json=essai_corps("055511101%d" % i))
     check("essai %d accepte" % (i + 1), r.status_code, 200)
+    if i == 0:
+        check("essai sans promesse email si non configure", r.json().get("email_prevu"), False)
 r = client.post("/api/trial-signup", json=essai_corps("0555111019"))
 check("essai 4e refuse limite", r.status_code, 429)
+db = SessionLocal()
+try:
+    insc = db.query(SupportTicket).filter(SupportTicket.sujet == "Inscription essai").first()
+finally:
+    db.close()
+check_true("inscription visible dans le support", bool(insc and insc.email))
+check_true(
+    "support inscription sans mot de passe",
+    insc is not None and "Essai1234" not in (insc.message or ""),
+)
+check("email non configure dans poc", email_configure(), False)
+send_trial_welcome_email("poc@example.com", "dr-alpha", "Dr Alpha", "MG")
+check_true("welcome email sans service ne plante pas", True)
+r = client.get("/health")
+check("health email_ok sans cle", r.json().get("email_ok"), False)
+check("health email_via sans cle", r.json().get("email_via"), None)
+check("email_via sans cle", email_via(), None)
+db = SessionLocal()
+try:
+    echec_mail = db.query(SupportTicket).filter(SupportTicket.sujet == "Echec e-mail inscription").first()
+finally:
+    db.close()
+check_true("echec email trace dans le support", bool(echec_mail))
 
 _signup_attempts.clear()
 for i in range(3):
@@ -503,8 +530,22 @@ check("register 4e refuse limite", r.status_code, 429)
 
 r = client.get("/mentions.html")
 check("page mentions", r.status_code, 200)
+check_true("mentions listent Render", "Render" in r.text)
+check_true("mentions listent Cloudflare", "Cloudflare" in r.text)
+check_true("mentions listent Brevo", "Brevo" in r.text)
 r = client.get("/confidentialite.html")
 check("page confidentialite", r.status_code, 200)
+check_true("confidentialite sans donnees de sante", "donnees de sante" not in r.text.lower())
+r = client.get("/cgu.html")
+check("page cgu", r.status_code, 200)
+check_true("cgu sous-traitant", "sous-traitant" in r.text)
+r = client.get("/sous-traitance.html")
+check("page sous-traitance", r.status_code, 200)
+r = client.get("/demarches.html")
+check("page demarches", r.status_code, 200)
+check_true("demarches ANAE", "ANAE" in r.text)
+r = client.get("/anpdp-dossier.html")
+check("page anpdp dossier", r.status_code, 200)
 
 _contact_attempts.clear()
 r = client.post("/api/contact", json={
@@ -513,6 +554,7 @@ r = client.post("/api/contact", json={
 check("contact honeypot refuse", r.status_code, 400)
 r = client.post("/api/contact", json={
     "nom": "Amine", "email": "amine@example.com", "message": "Question sur l essai",
+    "accepte_politique": True,
 })
 check("contact vitrine ok", r.status_code, 200)
 db = SessionLocal()
@@ -554,20 +596,108 @@ r = client.post("/api/cabinets/dr-prise/start-day", json={}, headers=auth(token_
 check("start-day limite prise", r.status_code, 200)
 _take_attempts.clear()
 for i in range(30):
-    r = client.post("/api/tickets/take", json={
-        "cabinet_slug": "dr-prise",
-        "nom_patient": "Patient %d" % i,
-    })
+    r = take("dr-prise", "Patient %d" % i)
     if r.status_code != 200:
         check("prise limite %d acceptee" % (i + 1), r.status_code, 200)
         break
 else:
     check("prises 30 acceptees", 200, 200)
-r = client.post("/api/tickets/take", json={
-    "cabinet_slug": "dr-prise",
-    "nom_patient": "Patient trop",
-})
+r = take("dr-prise", "Patient trop")
 check("prise 31e refusee limite", r.status_code, 429)
+
+r = take("dr-prise", "Sans case", accepte=False)
+check("prise sans consentement refusee", r.status_code, 400)
+_signup_attempts.clear()
+corps_sans = essai_corps("0555114001")
+corps_sans["accepte_politique"] = False
+r = client.post("/api/trial-signup", json=corps_sans)
+check("essai sans consentement refuse", r.status_code, 400)
+_contact_attempts.clear()
+r = client.post("/api/contact", json={
+    "nom": "Amine", "email": "amine2@example.com", "message": "Sans case",
+})
+check("contact sans consentement refuse", r.status_code, 400)
+r = client.get("/health")
+check("health email_ok present", "email_ok" in r.json(), True)
+check("health sans mail_from", "mail_from" in r.json(), False)
+
+_signup_attempts.clear()
+r = register("Dr Droits", "0555114100", "Droits123")
+check("cabinet droits", r.status_code, 200)
+token_d = login("dr-droits", "Droits123").json()["token"]
+client.post("/api/cabinets/dr-droits/start-day", json={}, headers=auth(token_d))
+_take_attempts.clear()
+r = take("dr-droits", "Patient Droits", "0555000111")
+tid_d = r.json()["ticket"]["id"]
+check_true("pii en ram avant cloture", tid_d in _pii_ephemere)
+r = client.get("/api/cabinets/dr-droits/export", headers=auth(token_d))
+check("export cabinet", r.status_code, 200)
+noms_export = [t.get("nom_patient") for t in r.json().get("tickets", [])]
+check_true("export sans noms patients", all(n is None for n in noms_export))
+check_true("export a le telephone cabinet", r.json().get("cabinet", {}).get("telephone") == "0555114100")
+r = client.post("/api/cabinets/dr-droits/close-day", json={"reason": "cabinet_closed"}, headers=auth(token_d))
+check("close-day droits", r.status_code, 200)
+check_true("pii purgee a la cloture", tid_d not in _pii_ephemere)
+
+_signup_attempts.clear()
+r = client.post("/api/trial-signup", json=essai_corps("0555114200", cabinet="Cabinet Efface"))
+check("essai pour suppression", r.status_code, 200)
+slug_eff = r.json().get("cabinet_slug")
+token_e = login(slug_eff, "Essai1234").json()["token"]
+r = client.get("/api/cabinets/" + slug_eff + "/export")
+check("export sans jeton refuse", r.status_code, 401)
+r = client.delete("/api/cabinets/" + slug_eff + "/account", headers=auth(token_e))
+check("suppression compte cabinet", r.status_code, 200)
+db = SessionLocal()
+try:
+    cab_eff = db.query(Cabinet).filter(Cabinet.slug == slug_eff).first()
+    supp_eff = db.query(SupportTicket).filter(
+        SupportTicket.message.contains("Identifiant : " + slug_eff)
+    ).first()
+finally:
+    db.close()
+check("cabinet efface absent", cab_eff, None)
+check("traces inscription effacees", supp_eff, None)
+
+_contact_attempts.clear()
+r = client.post("/api/cabinets/reset-password", json={
+    "slug": "dr-alpha", "telephone": "0555000001", "website": "http://spam.test",
+})
+check("reset honeypot refuse", r.status_code, 400)
+r = client.post("/api/cabinets/reset-password", json={
+    "slug": "dr-alpha", "telephone": "0000000000",
+})
+check("reset telephone faux reste 200", r.status_code, 200)
+r = client.post("/api/cabinets/reset-password", json={
+    "slug": "dr-alpha", "telephone": "0555000001",
+})
+check("reset telephone justes", r.status_code, 200)
+db = SessionLocal()
+try:
+    reset_t = db.query(SupportTicket).filter(SupportTicket.sujet == "Mot de passe oublie").first()
+    cab_a = db.query(Cabinet).filter(Cabinet.slug == "dr-alpha").first()
+    id_a = cab_a.id if cab_a else None
+finally:
+    db.close()
+check_true("reset visible dans le support", bool(reset_t))
+r = client.post("/api/admin/cabinets/%s/password" % id_a, json={"password": "Nouveau123"})
+check("reset admin sans jeton", r.status_code, 401)
+r = client.post(
+    "/api/admin/cabinets/%s/password" % id_a,
+    json={"password": "123"},
+    headers=admin_h,
+)
+check("reset admin mot de passe faible", r.status_code, 400)
+r = client.post(
+    "/api/admin/cabinets/%s/password" % id_a,
+    json={"password": "Nouveau123"},
+    headers=admin_h,
+)
+check("reset admin ok", r.status_code, 200)
+r = login("dr-alpha", "Alpha1234")
+check("ancien mot de passe refuse", r.status_code, 403)
+r = login("dr-alpha", "Nouveau123")
+check("nouveau mot de passe accepte", r.status_code, 200)
 
 print(f"\n=== Resultat : {passed} ok, {failed} echec ===")
 if os.path.exists(POC_DB):
