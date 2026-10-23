@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f9f8">
+  <title>TAFWITA — Acte de sous-traitance</title>
+  <style>
+    :root { --bg:#f4f9f8; --text:#24343d; --soft:#50646b; --teal:#16b6b0; --border:#dcefeb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; }
+    header { padding: 18px 0; border-bottom: 1px solid var(--border); background: #fff; }
+    .wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto; }
+    .logo { font-weight: 850; letter-spacing: .8px; color: var(--text); text-decoration: none; }
+    .logo span { color: var(--teal); }
+    nav { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+    nav a { color: var(--soft); text-decoration: none; font-size: 14px; }
+    nav a:hover { color: var(--teal); }
+    main { padding: 48px 0 80px; }
+    h1 { font-size: 32px; letter-spacing: -.8px; }
+    h2 { margin-top: 32px; font-size: 18px; }
+    p, li { color: var(--soft); font-size: 15px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="logo" href="./index.html">TAF<span>WITA</span></a>
+      <nav>
+        <a href="./index.html">Accueil</a>
+        <a href="./mentions.html">Mentions legales</a>
+        <a href="./confidentialite.html">Confidentialite</a>
+        <a href="./cgu.html">CGU</a>
+        <a href="./demarches.html">Demarches 18-07</a>
+        <a href="mailto:tafwitacontact@gmail.com">Contact</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <h1>Acte de sous-traitance</h1>
+      <p>Modele d'acte entre le cabinet (responsable du traitement des donnees de file) et TAFWITA (sous-traitant), au sens de la loi n° 18-07. A faire relire par un juriste. L'acceptation des CGU a l'essai vaut acceptation de cet acte.</p>
+
+      <h2>1. Parties</h2>
+      <p>Le cabinet medical identifie a l'inscription (nom, telephone, wilaya, identifiant) est le responsable du traitement pour le nom et le telephone des patients de sa file.</p>
+      <p>TAFWITA, service edite par un auto-entrepreneur ANAE (identite a completer), est le sous-traitant.</p>
+
+      <h2>2. Finalite</h2>
+      <p>Uniquement la gestion de la file d'attente du jour : emission d'un numero, appel, tickets papier, ecran TV sans noms, suivi du tour par le patient.</p>
+      <p>Interdiction : constituer un dossier medical, profiler, revendre, envoyer de la publicite, croiser les fichiers entre cabinets.</p>
+
+      <h2>3. Donnees concernees</h2>
+      <p>Nom du patient, telephone optionnel, numero de ticket, horodatage, evenements de file (libelles generiques). Pas de diagnostic, pas de piece d'identite, pas de paiement patient.</p>
+
+      <h2>4. Duree</h2>
+      <p>Le temps de la journee pour les noms et telephones (memoire serveur, puis purge a la cloture). Les numeros de ticket sans nom peuvent rester pour l'historique du cabinet. Le contrat suit l'essai puis l'abonnement, jusqu'a suppression du compte.</p>
+
+      <h2>5. Instructions</h2>
+      <p>TAFWITA n'agit que sur instruction du cabinet, via la console authentifiee (session 12 heures, mot de passe hache). Toute action cabinet verifie que le ticket appartient a ce cabinet.</p>
+
+      <h2>6. Securite</h2>
+      <ul>
+        <li>Mot de passe cabinet hache (bcrypt), jamais dans l'URL.</li>
+        <li>Noms et telephones absents de la base SQL et des routes publiques (TV, suivi, liste des cabinets).</li>
+        <li>HTTPS chez les hebergeurs actuels.</li>
+        <li>Limites par adresse IP contre l'abus.</li>
+      </ul>
+
+      <h2>7. Sous-traitants ulterieurs (hors Algerie aujourd'hui)</h2>
+      <ul>
+        <li>Render — API et base (Etats-Unis).</li>
+        <li>Cloudflare Pages — site public (Etats-Unis / reseau mondial).</li>
+        <li>Brevo — e-mail d'inscription du cabinet (Union europeenne). Les e-mails d'essai concernent le compte cabinet, pas le nom du patient.</li>
+      </ul>
+      <p>Contrats sous-traitants a joindre au dossier ANPDP (DPA Render, Cloudflare, Brevo) : liens dans <a href="./demarches.html">Demarches 18-07</a>.</p>
+
+      <h2>8. Sortie et restitution</h2>
+      <p>Le cabinet peut exporter un JSON (compte + tickets sans noms) puis supprimer le compte. TAFWITA efface alors les tickets, sessions, traces d'inscription liees a l'identifiant, et les noms encore en memoire.</p>
+
+      <h2>9. Assistance a l'ANPDP</h2>
+      <p>TAFWITA communique au cabinet les informations utiles pour repondre a une personne concernee ou a l'autorite, dans la limite de ce que le service conserve (souvent : pas le nom du patient apres la cloture du jour).</p>
+    </div>
+  </main>
+</body>
+</html>
