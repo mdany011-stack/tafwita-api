@@ -474,6 +474,7 @@
         etat + "</td><td>" + (c.total_issued || 0) + "</td><td>" +
         '<button class="btn btn-ghost btn-sm" data-act="toggle" data-id="' + c.id + '">' +
         (c.is_active ? "Desactiver" : "Activer") + "</button> " +
+        '<button class="btn btn-ghost btn-sm" data-act="pwd" data-id="' + c.id + '">Mot de passe</button> ' +
         '<button class="btn btn-danger btn-sm" data-act="del" data-id="' + c.id + '" data-nom="' +
         esc(c.nom_medecin) + '">Supprimer</button></td></tr>';
     });
@@ -683,6 +684,16 @@
       if (btn.getAttribute("data-act") === "toggle") {
         await api("/api/admin/cabinets/" + id + "/toggle", { method: "POST" });
         toast("Statut mis a jour.");
+        await loadAll();
+      }
+      if (btn.getAttribute("data-act") === "pwd") {
+        var np = prompt("Nouveau mot de passe (8 car. min, lettre + chiffre) :");
+        if (!np) return;
+        await api("/api/admin/cabinets/" + id + "/password", {
+          method: "POST",
+          body: JSON.stringify({ password: np })
+        });
+        toast("Mot de passe mis a jour.");
         await loadAll();
       }
       if (btn.getAttribute("data-act") === "del") {
