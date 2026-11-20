@@ -1,9 +1,13 @@
-const CACHE_NAME = "tafwita-v2";
+const CACHE_NAME = "tafwita-v5";
 
 const APP_SHELL = [
   "./",
   "./patient.html",
   "./cabinet.html",
+  "./tv.html",
+  "./confidentialite.html",
+  "./cgu.html",
+  "./mentions.html",
   "./manifest.webmanifest",
   "./manifest-cabinet.webmanifest",
   "./icon-192.png",
@@ -81,7 +85,7 @@ self.addEventListener("fetch", function (event) {
       })
       .catch(function () {
         return caches.match(request).then(function (cached) {
-          const fallback = url.pathname.indexOf("cabinet") >= 0 ? "./cabinet.html" : "./patient.html";
+          const fallback = url.pathname.indexOf("tv") >= 0 ? "./tv.html" : url.pathname.indexOf("cabinet") >= 0 ? "./cabinet.html" : "./patient.html";
           return cached || caches.match(fallback);
         });
       })
