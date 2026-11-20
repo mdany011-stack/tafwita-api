@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f9f8">
+  <title>TAFWITA — Demarches 18-07</title>
+  <style>
+    :root { --bg:#f4f9f8; --text:#24343d; --soft:#50646b; --teal:#16b6b0; --border:#dcefeb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; }
+    header { padding: 18px 0; border-bottom: 1px solid var(--border); background: #fff; }
+    .wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto; }
+    .logo { font-weight: 850; letter-spacing: .8px; color: var(--text); text-decoration: none; }
+    .logo span { color: var(--teal); }
+    nav { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+    nav a { color: var(--soft); text-decoration: none; font-size: 14px; }
+    nav a:hover { color: var(--teal); }
+    main { padding: 48px 0 80px; }
+    h1 { font-size: 32px; letter-spacing: -.8px; }
+    h2 { margin-top: 32px; font-size: 18px; }
+    p, li { color: var(--soft); font-size: 15px; }
+    .box { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; margin: 18px 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="logo" href="./index.html">TAF<span>WITA</span></a>
+      <nav>
+        <a href="./index.html">Accueil</a>
+        <a href="./mentions.html">Mentions legales</a>
+        <a href="./confidentialite.html">Confidentialite</a>
+        <a href="./cgu.html">CGU</a>
+        <a href="./sous-traitance.html">Sous-traitance</a>
+        <a href="./anpdp-dossier.html">Modele ANPDP</a>
+        <a href="mailto:tafwitacontact@gmail.com">Contact</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <h1>Demarches 18-07</h1>
+      <p>Liste pour l'editeur de TAFWITA. Ces etapes ne se font pas dans le code : elles se font aupres de l'ANAE, des impots, de l'ANPDP et des hebergeurs. Tant qu'elles ne sont pas terminees, le site ne doit pas afficher « conforme » ni « donnees 100 % en Algerie ».</p>
+
+      <div class="box">
+        <p><strong>A ne pas couper :</strong> Render et Cloudflare Pages restent en ligne jusqu'a ce qu'un VPS algerien marche. ISSAL n'est pas commande tant qu'ils n'acceptent pas la carte ANAE (ou un RC).</p>
+      </div>
+
+      <h2>1. Identite (cette semaine)</h2>
+      <ul>
+        <li>Inscription auto-entrepreneur sur <a href="https://anae.dz/fr/">anae.dz</a> : activite <strong>Developpeur web (020101)</strong> ou <strong>Developpeur logiciel (020103)</strong>.</li>
+        <li>Pas de registre de commerce requis pour ce statut (loi 22-23, art. 9).</li>
+        <li>Dans les 30 jours : NIF aux impots + declaration CASNOS.</li>
+        <li>Completer le paragraphe « Editeur » des <a href="./mentions.html">mentions</a> avec nom, wilaya, numero ANAE, NIF.</li>
+        <li>Ticket ISSAL : « acceptez-vous la carte ANAE + NIF a la place du RC pour un VPS FleXCompute Ubuntu ? » Ne rien payer tant qu'ils n'ont pas dit oui. Contact : <a href="https://issal.dz/contact/">issal.dz/contact</a>, +213 780 806 011.</li>
+        <li>Prendre un rendez-vous juriste / expert ANPDP (une consultation) pour qualifier les donnees et deposer le dossier.</li>
+      </ul>
+
+      <h2>2. Contrats fournisseurs (DPA)</h2>
+      <p>Telecharger et joindre au dossier ANPDP, sans coller de cles API :</p>
+      <ul>
+        <li>Render : <a href="https://render.com/dpa">render.com/dpa</a> et <a href="https://render.com/privacy">politique</a></li>
+        <li>Cloudflare : <a href="https://www.cloudflare.com/cloudflare-customer-dpa/">DPA client</a> et <a href="https://www.cloudflare.com/privacypolicy/">politique</a></li>
+        <li>Brevo : <a href="https://www.brevo.com/legal/termsofuse/">conditions</a> et <a href="https://www.brevo.com/legal/privacypolicy/">politique</a> (DPA dans l'espace client Brevo)</li>
+      </ul>
+
+      <h2>3. Dossier ANPDP</h2>
+      <p>Site : <a href="https://anpdp.dz">anpdp.dz</a>. Guide : <a href="https://anpdp.dz/wp-content/uploads/2024/07/Guide-de-formation-N%C2%B03-les-obligations-du-Responsable-du-traitement-ANPDP.pdf">obligations du responsable</a>.</p>
+      <p>Utiliser le <a href="./anpdp-dossier.html">modele de dossier</a> (deux traitements + demande de transfert). Joindre : carte ANAE, NIF, politique, CGU, acte de sous-traitance, DPA fournisseurs.</p>
+      <p>Sans recipisse ANPDP : ne pas ecrire « conforme 18-07 » sur le site.</p>
+
+      <h2>4. Hebergement algerien (plus tard, pas bloquant)</h2>
+      <p>Seulement si ANAE (ou RC) est accepte par ISSAL ou ICOSNET :</p>
+      <ul>
+        <li>1 VPS Ubuntu (FleXCompute ECO ou equivalent), pas un pack WordPress.</li>
+        <li>Domaine : .com si pas de RC ; .dz souvent exige un RC (<a href="https://www.nic.dz/">nic.dz</a>).</li>
+        <li>Boite mail professionnelle du meme hebergeur a la place de Brevo (SMTP).</li>
+        <li>Pointer le domaine vers le VPS, copier l'API + les HTML, renseigner DATABASE_URL et SMTP sans les mettre dans le code.</li>
+        <li>Mettre a jour le dossier ANPDP (changement de sous-traitants) et les mentions.</li>
+      </ul>
+      <p>Cela reduit le transfert etranger. Cela ne remplace pas les etapes 1 a 3.</p>
+    </div>
+  </main>
+</body>
+</html>
