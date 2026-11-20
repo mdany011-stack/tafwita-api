@@ -90,6 +90,12 @@ if ("serviceWorker" in navigator) {
       <label data-i="lblPin">Mot de passe</label>
       <input class="input" id="pin" type="password" autocomplete="current-password">
       <button class="primary" id="loginBtn" style="margin-top:16px" data-i="loginBtn">Ouvrir la file</button>
+      <button class="ghost" id="forgotOpen" style="margin-top:8px" data-i="forgot">Mot de passe oublie ?</button>
+      <div id="forgotBox" class="hidden" style="margin-top:12px">
+        <label data-i="lblTelReset">Telephone du cabinet</label>
+        <input class="input" id="forgotTel" type="tel" autocomplete="tel">
+        <button class="ghost" id="forgotSend" style="margin-top:10px" data-i="forgotSend">Envoyer la demande</button>
+      </div>
       <p class="msg" id="loginMsg"></p>
     </div>
   </section>
@@ -140,6 +146,11 @@ if ("serviceWorker" in navigator) {
       <button class="primary" id="saveSettings" style="margin-top:16px" data-i="save">Enregistrer</button>
       <p class="msg" id="setMsg"></p>
     </div>
+    <div class="card" style="margin-top:14px">
+      <h2 data-i="accountTitle">Votre compte</h2>
+      <button class="ghost" id="exportData" style="margin-top:12px" data-i="exportBtn">Telecharger mes donnees</button>
+      <button class="ghost" id="deleteAccount" style="margin-top:8px;color:#bc5d62" data-i="deleteBtn">Supprimer mon compte</button>
+    </div>
   </section>
 </div>
 
@@ -185,9 +196,9 @@ const LK="tafwita_cabinet_language", CK="tafwita_cabinet_session";
 let lang=localStorage.getItem(LK)||"FR";
 let sess=null, data={}, page="home", timer=null;
 const I={
-FR:{sub:"Console cabinet",logout:"Quitter",install:"Installer",installHint:"Ouvrez le menu du navigateur puis Ajouter a l ecran d accueil",loginTitle:"Connexion cabinet",loginLead:"Identifiant recu a l'inscription, et mot de passe. Fonctionne sur telephone.",lblSlug:"Identifiant cabinet",lblPin:"Mot de passe",loginBtn:"Ouvrir la file",stServing:"En consultation",stWait:"En attente",stTotal:"Tickets du jour",dayTitle:"Gestion de la journee",queueTitle:"File en direct",histTitle:"Historique",histLead:"Tickets du cabinet sur cet appareil.",setTitle:"Horaires et regles",setLead:"Les patients peuvent prendre un ticket avant l'ouverture.",lblMode:"Mode de fermeture",lblStart:"Debut prise de tickets",lblEnd:"Fin auto prise",lblOpen:"Ouverture cabinet",lblClose:"Fermeture prevue",lblMax:"Maximum tickets par jour",save:"Enregistrer",navHome:"Accueil",navHist:"Historique",navSet:"Horaires",addTitle:"Ticket papier",lblNom:"Nom du patient",lblTel:"Telephone (optionnel)",addOk:"Ajouter",cancel:"Annuler",close:"Fermer",empty:"Aucun ticket actif.",noHist:"Aucun historique.",loading:"Chargement...",ok:"Operation enregistree.",needPin:"Mot de passe obligatoire.",needSlug:"Identifiant obligatoire.",closed:"JOURNEE CLOTUREE",active:"PRISE ACTIVE",stopped:"PRISE ARRETEE",waiting:"En attente",returned:"Remis en attente",suspended:"Suspendu",urgent:"Priorite medicale",urgent_requested:"Demande de priorite",serving:"En consultation",completed:"Termine",cancelled:"Annule",startQ:"Demarrer une nouvelle journee ?",closeQ:"Cloturer la journee ? Les tickets restants seront annules.",urgentQ:"Motif urgence :",cancelNeed:"Annulation impossible : passages insuffisants (5 requis).",cancelQ:"Confirmer l'annulation ?",tvBtn:"Ecran TV",tvTitle:"Ecran TV",tvHint:"Branchez un ordinateur ou un telephone a la tele avec un cable HDMI. Ouvrez la page, puis plein ecran. Une tele normale suffit.",tvOpen:"Ouvrir l ecran TV"},
-EN:{sub:"Clinic console",logout:"Log out",install:"Install",installHint:"Open the browser menu, then Add to Home Screen",loginTitle:"Clinic login",loginLead:"Use the login from signup and your password. Works on a phone.",lblSlug:"Clinic login",lblPin:"Password",loginBtn:"Open the queue",stServing:"Being seen",stWait:"Waiting",stTotal:"Tickets today",dayTitle:"Day controls",queueTitle:"Live queue",histTitle:"History",histLead:"Clinic tickets on this device.",setTitle:"Hours and rules",setLead:"Patients can take a ticket before opening time.",lblMode:"Closing mode",lblStart:"Ticket intake start",lblEnd:"Auto intake end",lblOpen:"Clinic opening",lblClose:"Planned closing",lblMax:"Maximum tickets per day",save:"Save",navHome:"Home",navHist:"History",navSet:"Hours",addTitle:"Paper ticket",lblNom:"Patient name",lblTel:"Phone (optional)",addOk:"Add",cancel:"Cancel",close:"Close",empty:"No active ticket.",noHist:"No history.",loading:"Loading...",ok:"Saved.",needPin:"Password is required.",needSlug:"Login is required.",closed:"DAY CLOSED",active:"INTAKE ON",stopped:"INTAKE OFF",waiting:"Waiting",returned:"Back in queue",suspended:"Suspended",urgent:"Medical priority",urgent_requested:"Priority request",serving:"Being seen",completed:"Done",cancelled:"Cancelled",startQ:"Start a new day?",closeQ:"Close the day? Remaining tickets will be cancelled.",urgentQ:"Priority reason:",cancelNeed:"Cancel not allowed: not enough no-shows (5 required).",cancelQ:"Confirm cancellation?",tvBtn:"TV screen",tvTitle:"TV screen",tvHint:"Plug a computer or phone into the TV with an HDMI cable. Open the page, then fullscreen. A normal TV is enough.",tvOpen:"Open TV screen"},
-AR:{sub:"شاشة العيادة",logout:"خروج",install:"تثبيت",installHint:"افتح قائمة المتصفح ثم أضف إلى الشاشة الرئيسية",loginTitle:"دخول العيادة",loginLead:"المعرّف المستلم عند التسجيل وكلمة المرور. يعمل على الهاتف.",lblSlug:"معرّف العيادة",lblPin:"كلمة المرور",loginBtn:"فتح الطابور",stServing:"قيد المعاينة",stWait:"في الانتظار",stTotal:"تذاكر اليوم",dayTitle:"إدارة اليوم",queueTitle:"الطابور مباشر",histTitle:"السجل",histLead:"تذاكر العيادة على هذا الجهاز.",setTitle:"الأوقات والقواعد",setLead:"يمكن للمرضى أخذ تذكرة قبل الافتتاح.",lblMode:"وضع الإغلاق",lblStart:"بداية أخذ التذاكر",lblEnd:"نهاية أخذ التذاكر",lblOpen:"افتتاح العيادة",lblClose:"الإغلاق المتوقع",lblMax:"الحد الأقصى للتذاكر في اليوم",save:"حفظ",navHome:"الرئيسية",navHist:"السجل",navSet:"الأوقات",addTitle:"تذكرة ورقية",lblNom:"اسم المريض",lblTel:"الهاتف (اختياري)",addOk:"إضافة",cancel:"إلغاء",close:"إغلاق",empty:"لا توجد تذكرة نشطة.",noHist:"لا يوجد سجل.",loading:"جار التحميل...",ok:"تم التسجيل.",needPin:"كلمة المرور إلزامية.",needSlug:"المعرّف إلزامي.",closed:"اليوم مغلق",active:"الأخذ مفتوح",stopped:"الأخذ متوقف",waiting:"في الانتظار",returned:"عاد للقائمة",suspended:"معلق",urgent:"أولوية طبية",urgent_requested:"طلب أولوية",serving:"قيد المعاينة",completed:"انتهى",cancelled:"ملغى",startQ:"بدء يوم جديد؟",closeQ:"إغلاق اليوم؟ سيتم إلغاء التذاكر المتبقية.",urgentQ:"سبب الأولوية:",cancelNeed:"الإلغاء غير ممكن: عدد النداءات غير كاف (5 مطلوبة).",cancelQ:"تأكيد الإلغاء؟",tvBtn:"شاشة التلفاز",tvTitle:"شاشة التلفاز",tvHint:"اربط حاسوباً أو هاتفاً بالتلفاز بكابل HDMI. افتح الصفحة ثم ملء الشاشة. يكفي تلفاز عادي.",tvOpen:"فتح شاشة التلفاز"}
+FR:{sub:"Console cabinet",logout:"Quitter",install:"Installer",installHint:"Ouvrez le menu du navigateur puis Ajouter a l ecran d accueil",loginTitle:"Connexion cabinet",loginLead:"Identifiant recu a l'inscription, et mot de passe. Fonctionne sur telephone.",lblSlug:"Identifiant cabinet",lblPin:"Mot de passe",loginBtn:"Ouvrir la file",stServing:"En consultation",stWait:"En attente",stTotal:"Tickets du jour",dayTitle:"Gestion de la journee",queueTitle:"File en direct",histTitle:"Historique",histLead:"Tickets du cabinet sur cet appareil.",setTitle:"Horaires et regles",setLead:"Les patients peuvent prendre un ticket avant l'ouverture.",lblMode:"Mode de fermeture",lblStart:"Debut prise de tickets",lblEnd:"Fin auto prise",lblOpen:"Ouverture cabinet",lblClose:"Fermeture prevue",lblMax:"Maximum tickets par jour",save:"Enregistrer",navHome:"Accueil",navHist:"Historique",navSet:"Horaires",addTitle:"Ticket papier",lblNom:"Nom du patient",lblTel:"Telephone (optionnel)",addOk:"Ajouter",cancel:"Annuler",close:"Fermer",empty:"Aucun ticket actif.",noHist:"Aucun historique.",loading:"Chargement...",ok:"Operation enregistree.",needPin:"Mot de passe obligatoire.",needSlug:"Identifiant obligatoire.",closed:"JOURNEE CLOTUREE",active:"PRISE ACTIVE",stopped:"PRISE ARRETEE",waiting:"En attente",returned:"Remis en attente",suspended:"Suspendu",urgent:"Priorite medicale",urgent_requested:"Demande de priorite",serving:"En consultation",completed:"Termine",cancelled:"Annule",startQ:"Demarrer une nouvelle journee ?",closeQ:"Cloturer la journee ? Les tickets restants seront annules.",urgentQ:"Motif urgence :",cancelNeed:"Annulation impossible : passages insuffisants (5 requis).",cancelQ:"Confirmer l'annulation ?",tvBtn:"Ecran TV",tvTitle:"Ecran TV",tvHint:"Branchez un ordinateur ou un telephone a la tele avec un cable HDMI. Ouvrez la page, puis plein ecran. Une tele normale suffit.",tvOpen:"Ouvrir l ecran TV",forgot:"Mot de passe oublie ?",lblTelReset:"Telephone du cabinet",forgotSend:"Envoyer la demande",forgotOk:"Demande envoyee. TAFWITA vous contacte hors e-mail.",accountTitle:"Votre compte",exportBtn:"Telecharger mes donnees",deleteBtn:"Supprimer mon compte",deleteQ:"Supprimer le compte cabinet ? Cette action est definitive.",deleteQ2:"Confirmer la suppression des donnees du cabinet ?",deleted:"Compte supprime."},
+EN:{sub:"Clinic console",logout:"Log out",install:"Install",installHint:"Open the browser menu, then Add to Home Screen",loginTitle:"Clinic login",loginLead:"Use the login from signup and your password. Works on a phone.",lblSlug:"Clinic login",lblPin:"Password",loginBtn:"Open the queue",stServing:"Being seen",stWait:"Waiting",stTotal:"Tickets today",dayTitle:"Day controls",queueTitle:"Live queue",histTitle:"History",histLead:"Clinic tickets on this device.",setTitle:"Hours and rules",setLead:"Patients can take a ticket before opening time.",lblMode:"Closing mode",lblStart:"Ticket intake start",lblEnd:"Auto intake end",lblOpen:"Clinic opening",lblClose:"Planned closing",lblMax:"Maximum tickets per day",save:"Save",navHome:"Home",navHist:"History",navSet:"Hours",addTitle:"Paper ticket",lblNom:"Patient name",lblTel:"Phone (optional)",addOk:"Add",cancel:"Cancel",close:"Close",empty:"No active ticket.",noHist:"No history.",loading:"Loading...",ok:"Saved.",needPin:"Password is required.",needSlug:"Login is required.",closed:"DAY CLOSED",active:"INTAKE ON",stopped:"INTAKE OFF",waiting:"Waiting",returned:"Back in queue",suspended:"Suspended",urgent:"Medical priority",urgent_requested:"Priority request",serving:"Being seen",completed:"Done",cancelled:"Cancelled",startQ:"Start a new day?",closeQ:"Close the day? Remaining tickets will be cancelled.",urgentQ:"Priority reason:",cancelNeed:"Cancel not allowed: not enough no-shows (5 required).",cancelQ:"Confirm cancellation?",tvBtn:"TV screen",tvTitle:"TV screen",tvHint:"Plug a computer or phone into the TV with an HDMI cable. Open the page, then fullscreen. A normal TV is enough.",tvOpen:"Open TV screen",forgot:"Forgot password?",lblTelReset:"Clinic phone",forgotSend:"Send request",forgotOk:"Request sent. TAFWITA will contact you outside email.",accountTitle:"Your account",exportBtn:"Download my data",deleteBtn:"Delete my account",deleteQ:"Delete the clinic account? This cannot be undone.",deleteQ2:"Confirm deletion of clinic data?",deleted:"Account deleted."},
+AR:{sub:"شاشة العيادة",logout:"خروج",install:"تثبيت",installHint:"افتح قائمة المتصفح ثم أضف إلى الشاشة الرئيسية",loginTitle:"دخول العيادة",loginLead:"المعرّف المستلم عند التسجيل وكلمة المرور. يعمل على الهاتف.",lblSlug:"معرّف العيادة",lblPin:"كلمة المرور",loginBtn:"فتح الطابور",stServing:"قيد المعاينة",stWait:"في الانتظار",stTotal:"تذاكر اليوم",dayTitle:"إدارة اليوم",queueTitle:"الطابور مباشر",histTitle:"السجل",histLead:"تذاكر العيادة على هذا الجهاز.",setTitle:"الأوقات والقواعد",setLead:"يمكن للمرضى أخذ تذكرة قبل الافتتاح.",lblMode:"وضع الإغلاق",lblStart:"بداية أخذ التذاكر",lblEnd:"نهاية أخذ التذاكر",lblOpen:"افتتاح العيادة",lblClose:"الإغلاق المتوقع",lblMax:"الحد الأقصى للتذاكر في اليوم",save:"حفظ",navHome:"الرئيسية",navHist:"السجل",navSet:"الأوقات",addTitle:"تذكرة ورقية",lblNom:"اسم المريض",lblTel:"الهاتف (اختياري)",addOk:"إضافة",cancel:"إلغاء",close:"إغلاق",empty:"لا توجد تذكرة نشطة.",noHist:"لا يوجد سجل.",loading:"جار التحميل...",ok:"تم التسجيل.",needPin:"كلمة المرور إلزامية.",needSlug:"المعرّف إلزامي.",closed:"اليوم مغلق",active:"الأخذ مفتوح",stopped:"الأخذ متوقف",waiting:"في الانتظار",returned:"عاد للقائمة",suspended:"معلق",urgent:"أولوية طبية",urgent_requested:"طلب أولوية",serving:"قيد المعاينة",completed:"انتهى",cancelled:"ملغى",startQ:"بدء يوم جديد؟",closeQ:"إغلاق اليوم؟ سيتم إلغاء التذاكر المتبقية.",urgentQ:"سبب الأولوية:",cancelNeed:"الإلغاء غير ممكن: عدد النداءات غير كاف (5 مطلوبة).",cancelQ:"تأكيد الإلغاء؟",tvBtn:"شاشة التلفاز",tvTitle:"شاشة التلفاز",tvHint:"اربط حاسوباً أو هاتفاً بالتلفاز بكابل HDMI. افتح الصفحة ثم ملء الشاشة. يكفي تلفاز عادي.",tvOpen:"فتح شاشة التلفاز",forgot:"نسيت كلمة المرور؟",lblTelReset:"هاتف العيادة",forgotSend:"إرسال الطلب",forgotOk:"تم إرسال الطلب. ستتواصل تافويتا خارج البريد.",accountTitle:"حسابك",exportBtn:"تنزيل بياناتي",deleteBtn:"حذف حسابي",deleteQ:"حذف حساب العيادة؟ هذا نهائي.",deleteQ2:"تأكيد حذف بيانات العيادة؟",deleted:"تم حذف الحساب."}
 };
 const $=id=>document.getElementById(id),tr=k=>I[lang]&&I[lang][k]||I.FR[k]||k;
 const esc=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
@@ -270,6 +281,19 @@ function startPoll(){stop();timer=setInterval(()=>{if(sess&&page!=="settings")re
 function stop(){if(timer){clearInterval(timer);timer=null}}
 
 $("language").onclick=()=>{lang={FR:"EN",EN:"AR",AR:"FR"}[lang];localStorage.setItem(LK,lang);translate()};
+$("forgotOpen").onclick=()=>$("forgotBox").classList.toggle("hidden");
+$("forgotSend").onclick=async()=>{
+  const slug=$("slug").value.trim().toLowerCase().replace(/\s+/g,"-"), tel=$("forgotTel").value.trim();
+  if(!slug){$("loginMsg").textContent=tr("needSlug");return}
+  if(!tel){$("loginMsg").textContent=tr("lblTelReset");return}
+  $("forgotSend").disabled=true;
+  try{
+    const r=await fetch(API+"/api/cabinets/reset-password",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({slug,telephone:tel})});
+    const d=await j(r);if(!r.ok)throw Error(d.detail||tr("forgot"));
+    $("loginMsg").style.color="#2c8b69";$("loginMsg").textContent=tr("forgotOk");
+  }catch(e){$("loginMsg").style.color="#bc5d62";$("loginMsg").textContent=e.message}
+  finally{$("forgotSend").disabled=false}
+};
 $("loginBtn").onclick=async()=>{
   const slug=$("slug").value.trim().toLowerCase().replace(/\s+/g,"-"), pin=$("pin").value;
   if(!slug){$("loginMsg").textContent=tr("needSlug");return}
@@ -289,10 +313,10 @@ $("tvBtn").onclick=()=>{if(!sess)return;$("tvLink").textContent=tvUrl();$("tvMod
 $("tvOpen").onclick=()=>{if(sess)window.open(tvUrl(),"_blank","noopener")};
 $("tvBack").onclick=$("tvClose").onclick=()=>$("tvModal").classList.remove("open");
 document.querySelectorAll(".nav").forEach(b=>b.onclick=()=>go(b.dataset.view));
-$("btnStart").onclick=()=>{if(confirm(tr("startQ")))act("POST","/api/cabinets/"+encodeURIComponent(sess.slug)+"/start-day",{})};
+$("btnStart").onclick=()=>{if(confirm(tr("startQ"))){try{localStorage.removeItem(piiKey())}catch(e){}act("POST","/api/cabinets/"+encodeURIComponent(sess.slug)+"/start-day",{})}};
 $("btnNext").onclick=()=>act("POST","/api/queue/"+encodeURIComponent(sess.slug)+"/next");
 $("btnToggle").onclick=()=>act("PUT","/api/cabinets/"+encodeURIComponent(sess.slug)+"/settings",{accept_tickets:!data.accept_tickets});
-$("btnClose").onclick=()=>{if(confirm(tr("closeQ")))act("POST","/api/cabinets/"+encodeURIComponent(sess.slug)+"/close-day",{reason:"cabinet_closed"})};
+$("btnClose").onclick=()=>{if(confirm(tr("closeQ"))){try{localStorage.removeItem(piiKey())}catch(e){}act("POST","/api/cabinets/"+encodeURIComponent(sess.slug)+"/close-day",{reason:"cabinet_closed"})}};
 $("btnAdd").onclick=()=>{$("addModal").classList.add("open");$("addNom").value="";$("addTel").value=""};
 $("addBack").onclick=$("addCancel").onclick=()=>$("addModal").classList.remove("open");
 $("addOk").onclick=async()=>{
@@ -302,6 +326,22 @@ $("addOk").onclick=async()=>{
     const d=await api("POST","/api/tickets/add-manual",{cabinet_slug:sess.slug,nom_patient:nom,telephone:tel||null});
     const t=d.ticket||{};savePii(t.id,nom,tel);$("addModal").classList.remove("open");toast(tr("ok"));refresh();
   }catch(e){toast(e.message)}
+};
+$("exportData").onclick=async()=>{
+  try{
+    const d=await api("GET","/api/cabinets/"+encodeURIComponent(sess.slug)+"/export");
+    const blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="tafwita-"+sess.slug+".json";a.click();
+    $("setMsg").style.color="#2c8b69";$("setMsg").textContent=tr("ok");
+  }catch(e){$("setMsg").style.color="#bc5d62";$("setMsg").textContent=e.message}
+};
+$("deleteAccount").onclick=async()=>{
+  if(!confirm(tr("deleteQ"))||!confirm(tr("deleteQ2")))return;
+  try{
+    await api("DELETE","/api/cabinets/"+encodeURIComponent(sess.slug)+"/account");
+    try{localStorage.removeItem(piiKey());localStorage.removeItem(CK)}catch(e){}
+    sess=null;stop();showLogin();toast(tr("deleted"));
+  }catch(e){$("setMsg").style.color="#bc5d62";$("setMsg").textContent=e.message}
 };
 $("saveSettings").onclick=async()=>{
   const p={ticket_mode:$("ticketMode").value,ticket_start_time:$("ticketStart").value.trim(),ticket_end_time:$("ticketEnd").value.trim()||null,opening_time:$("opening").value.trim(),closing_time:$("closing").value.trim()||null,max_tickets_per_day:$("maximum").value.trim()?Number($("maximum").value.trim()):null};
