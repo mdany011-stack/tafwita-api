@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f9f8">
+  <title>TAFWITA — Modele dossier ANPDP</title>
+  <style>
+    :root { --bg:#f4f9f8; --text:#24343d; --soft:#50646b; --teal:#16b6b0; --border:#dcefeb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.65; }
+    header { padding: 18px 0; border-bottom: 1px solid var(--border); background: #fff; }
+    .wrap { width: min(760px, calc(100% - 40px)); margin: 0 auto; }
+    .logo { font-weight: 850; letter-spacing: .8px; color: var(--text); text-decoration: none; }
+    .logo span { color: var(--teal); }
+    nav { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 10px; }
+    nav a { color: var(--soft); text-decoration: none; font-size: 14px; }
+    nav a:hover { color: var(--teal); }
+    main { padding: 48px 0 80px; }
+    h1 { font-size: 32px; letter-spacing: -.8px; }
+    h2 { margin-top: 32px; font-size: 18px; }
+    p, li { color: var(--soft); font-size: 15px; }
+    .todo { background: #fff4de; border-radius: 12px; padding: 12px 14px; color: #755714; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <a class="logo" href="./index.html">TAF<span>WITA</span></a>
+      <nav>
+        <a href="./index.html">Accueil</a>
+        <a href="./demarches.html">Demarches 18-07</a>
+        <a href="./confidentialite.html">Confidentialite</a>
+        <a href="mailto:tafwitacontact@gmail.com">Contact</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <h1>Modele de dossier ANPDP</h1>
+      <p class="todo">A completer avec un juriste, puis a deposer sur <a href="https://anpdp.dz">anpdp.dz</a>. Ce n'est pas un depot. Les crochets [ ] sont a remplir par l'editeur.</p>
+
+      <h2>Identite du responsable</h2>
+      <ul>
+        <li>Nom / prenom : [a completer]</li>
+        <li>Qualite : auto-entrepreneur ANAE, activite 020101 ou 020103</li>
+        <li>Numero carte ANAE : [ ] — NIF : [ ]</li>
+        <li>Adresse / wilaya : [ ]</li>
+        <li>Contact : tafwitacontact@gmail.com</li>
+        <li>Service : TAFWITA, file d'attente pour cabinets medicaux, https://tafwita.pages.dev/</li>
+      </ul>
+
+      <h2>Traitement A — Comptes cabinets (TAFWITA responsable)</h2>
+      <ul>
+        <li>Finalite : creer et gerer l'essai / l'abonnement, repondre au contact.</li>
+        <li>Base : execution de mesures precontractuelles et du contrat d'essai ; information de la personne.</li>
+        <li>Donnees : nom, prenom, nom du cabinet, telephone, e-mail, specialite, wilaya, mot de passe hache, IP (limiteur).</li>
+        <li>Personnes : medecins / secretaires qui s'inscrivent ; visiteurs du formulaire contact.</li>
+        <li>Duree : essai 45 jours + abonnement ; traces admin 12 mois ; suppression sur demande.</li>
+        <li>Destinataires : editeur TAFWITA ; Render (hebergement) ; Brevo (e-mail) ; Google (boite contact).</li>
+      </ul>
+
+      <h2>Traitement B — File patients (cabinet responsable, TAFWITA sous-traitant)</h2>
+      <ul>
+        <li>Finalite : numeroter et appeler les patients du jour.</li>
+        <li>Donnees : nom, telephone optionnel, numero de ticket, evenements de file (libelles generiques).</li>
+        <li>Pas un dossier medical. Qualification exacte (sensible ou non) a confirmer par le juriste.</li>
+        <li>Duree : noms/telephones en memoire jusqu'a cloture de la journee. Numeros sans nom : historique cabinet.</li>
+        <li>Destinataires : le cabinet (console authentifiee) ; TAFWITA (sous-traitant) ; Render (serveur). Cloudflare sert les pages, pas la base des noms.</li>
+      </ul>
+
+      <h2>Demande de transfert hors d'Algerie</h2>
+      <p>En application des articles 44 et suivants de la loi 18-07 (et des dispositions ajoutees par la loi 25-11), demande d'autorisation de transfert vers :</p>
+      <ul>
+        <li>Etats-Unis — Render (API, base) ; Cloudflare (pages) ; Google (e-mail de contact).</li>
+        <li>Union europeenne — Brevo (e-mail d'inscription cabinet).</li>
+      </ul>
+      <p>Mesures : HTTPS, mot de passe hache, noms patients hors SQL et hors ecrans publics, DPA fournisseurs, information et case d'acceptation, purge journaliere des noms.</p>
+      <p>Objectif ulterieur : rapatrier API, site et e-mail sur un VPS / messagerie en Algerie, puis actualiser ce dossier.</p>
+
+      <h2>Pieces a joindre</h2>
+      <ul>
+        <li>Carte ANAE + NIF</li>
+        <li>Politique de confidentialite, CGU, acte de sous-traitance (pages du site)</li>
+        <li>DPA Render, Cloudflare, Brevo</li>
+        <li>Eventuelle etude d'impact si le juriste l'estime exigee (loi 25-11)</li>
+      </ul>
+    </div>
+  </main>
+</body>
+</html>
